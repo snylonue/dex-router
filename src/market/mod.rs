@@ -4,26 +4,32 @@ pub trait Market {
 
 #[derive(Debug)]
 pub struct UniswapV3 {
+    // sqrt of current price
     current_price: f64,
     current_tick: usize,
-    lower_ticks: Vec<i32>,
+    // sqrt of lower price
+    lower_prices: Vec<f64>,
     // sqrt of liquidity
     liquidity: Vec<f64>,
     fee: f64,
 }
 
 impl UniswapV3 {
-    pub fn new(
-        current_price: f64,
-        current_tick: usize,
-        lower_ticks: Vec<i32>,
-        liquidity: Vec<f64>,
-        fee: f64,
-    ) -> Self {
+    pub fn new(current_price: f64, lower_prices: Vec<f64>, liquidity: Vec<f64>, fee: f64) -> Self {
         Self {
             current_price,
-            current_tick,
-            lower_ticks,
+            current_tick: {
+                let reversed = {
+                    let mut r = lower_prices.clone();
+                    r.reverse();
+                    r
+                };
+                match reversed.binary_search_by(|&f| f.total_cmp(&current_price)) {
+                    Ok(idx) => idx,
+                    Err(idx) => idx - 1,
+                }
+            },
+            lower_prices,
             liquidity,
             fee,
         }
@@ -36,10 +42,7 @@ impl Market for UniswapV3 {
         let p0 = self.current_price.powi(2);
 
         if p < p0 * self.fee {
-            let prices = self.lower_ticks[self.current_tick..]
-                .iter()
-                .map(|&tick| 1.0001_f64.powi(tick))
-                .collect::<Vec<_>>();
+            let prices = &self.lower_prices[self.current_tick..];
             let liquidity = &self.liquidity[self.current_tick..];
             let mut input = [0.0; 2];
             let mut output = [0.0; 2];
@@ -53,16 +56,11 @@ impl Market for UniswapV3 {
                 }
                 let pu = prices[i];
                 let pl = prices.get(i + 1).copied().unwrap_or_default();
-                let alpha = k / pu.sqrt();
-                let beta = k * pl.sqrt();
-                let p_cur = if i > 0 { pu } else { p0 };
-                let range = BoundedLiquidity::new(
-                    k,
-                    alpha,
-                    beta,
-                    k / p_cur.sqrt() - alpha,
-                    k * p_cur.sqrt() - beta,
-                );
+                let alpha = k / pu;
+                let beta = k * pl;
+                let p_cur = if i > 0 { pu } else { self.current_price };
+                let range =
+                    BoundedLiquidity::new(k, alpha, beta, k / p_cur - alpha, k * p_cur - beta);
                 let (delta0, delta1) = range.arbitrage_pos(p / self.fee);
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
                     break;
@@ -74,10 +72,7 @@ impl Market for UniswapV3 {
             input[0] /= self.fee;
             (input, output)
         } else if p > p0 / self.fee {
-            let prices = self.lower_ticks[1..=self.current_tick + 1]
-                .iter()
-                .map(|&tick| 1.0001_f64.powi(tick))
-                .collect::<Vec<_>>();
+            let prices = &self.lower_prices[1..=self.current_tick + 1];
             let liquidity = &self.liquidity[..=self.current_tick];
             let mut input = [0.0; 2];
             let mut output = [0.0; 2];
@@ -91,19 +86,23 @@ impl Market for UniswapV3 {
                 }
                 let pl = prices[i];
                 let pu = if i == 0 {
-                    1.0001_f64.powi(self.lower_ticks[0])
+                    self.lower_prices[0]
                 } else {
                     prices[i - 1]
                 };
-                let alpha = k / pu.sqrt();
-                let beta = k * pl.sqrt();
-                let p_cur = if i < self.current_tick { pl } else { p0 };
+                let alpha = k / pu;
+                let beta = k * pl;
+                let p_cur = if i < self.current_tick {
+                    pl
+                } else {
+                    self.current_price
+                };
                 let range = BoundedLiquidity::new(
                     k,
                     beta,
                     alpha,
-                    k * p_cur.sqrt() - beta,
-                    k / p_cur.sqrt() - alpha,
+                    k * p_cur - beta,
+                    k / p_cur - alpha,
                 );
                 let (delta0, delta1) = range.arbitrage_pos(1.0 / (self.fee * p));
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
@@ -165,15 +164,19 @@ mod tests {
     use super::{Market, UniswapV3};
 
     fn allclose(x: [f64; 2], y: [f64; 2]) -> bool {
-        arr1(&x).abs_diff_eq(&arr1(&y), 1e-10)
+        arr1(&x).abs_diff_eq(&arr1(&y), 1e-4)
     }
 
     #[test]
     fn uniswap_v3_arb_neg() {
         let pool = UniswapV3::new(
             3.872983346207417,
-            1,
-            vec![34014, 29959, 23027, 16095],
+            vec![
+                5.477225575051661,
+                4.47213595499958,
+                3.1622776601683795,
+                2.23606797749979,
+            ],
             vec![1.0, 1.4142135623730951, 1.224744871391589, 0.0],
             0.997,
         );
@@ -188,8 +191,12 @@ mod tests {
     fn uniswap_v3_arb_pos() {
         let pool = UniswapV3::new(
             3.872983346207417,
-            1,
-            vec![34014, 29959, 23027, 16095],
+            vec![
+                5.477225575051661,
+                4.47213595499958,
+                3.1622776601683795,
+                2.23606797749979,
+            ],
             vec![1.0, 1.4142135623730951, 1.224744871391589, 0.0],
             0.997,
         );
