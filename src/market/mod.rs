@@ -12,7 +12,23 @@ pub struct UniswapV3 {
     fee: f64,
 }
 
-impl UniswapV3 {}
+impl UniswapV3 {
+    pub fn new(
+        current_price: f64,
+        current_tick: usize,
+        lower_ticks: Vec<i32>,
+        liquidity: Vec<f64>,
+        fee: f64,
+    ) -> Self {
+        Self {
+            current_price,
+            current_tick,
+            lower_ticks,
+            liquidity,
+            fee,
+        }
+    }
+}
 
 impl Market for UniswapV3 {
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
@@ -36,12 +52,18 @@ impl Market for UniswapV3 {
                     continue;
                 }
                 let pu = prices[i];
-                let alpha = k / pu;
-                let beta = k * pu;
+                let pl = prices.get(i + 1).copied().unwrap_or_default();
+                let alpha = k / pu.sqrt();
+                let beta = k * pl.sqrt();
                 let p_cur = if i > 0 { pu } else { p0 };
-                let range =
-                    BoundedLiquidity::new(k, alpha, beta, k / p_cur - alpha, k * p_cur + beta);
-                let (delta0, delta1) = range.arbitrage_pos(p0 / self.fee);
+                let range = BoundedLiquidity::new(
+                    k,
+                    alpha,
+                    beta,
+                    k / p_cur.sqrt() - alpha,
+                    k * p_cur.sqrt() + beta,
+                );
+                let (delta0, delta1) = range.arbitrage_pos(p / self.fee);
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
                     break;
                 }
@@ -68,12 +90,22 @@ impl Market for UniswapV3 {
                     continue;
                 }
                 let pl = prices[i];
-                let alpha = k / pl;
-                let beta = k * pl;
+                let pu = if i == 0 {
+                    1.0001_f64.powi(self.lower_ticks[0])
+                } else {
+                    prices[i - 1]
+                };
+                let alpha = k / pu.sqrt();
+                let beta = k * pl.sqrt();
                 let p_cur = if i < self.current_tick { pl } else { p0 };
-                let range =
-                    BoundedLiquidity::new(k, beta, alpha, k * p_cur + beta, k / p_cur - alpha);
-                let (delta0, delta1) = range.arbitrage_pos(1.0 / (self.fee * p0));
+                let range = BoundedLiquidity::new(
+                    k,
+                    beta,
+                    alpha,
+                    k * p_cur.sqrt() - beta,
+                    k / p_cur.sqrt() - alpha,
+                );
+                let (delta0, delta1) = range.arbitrage_pos(1.0 / (self.fee * p));
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
                     break;
                 }
@@ -111,15 +143,15 @@ impl BoundedLiquidity {
     }
 
     pub fn arbitrage_pos(&self, p: f64) -> (f64, f64) {
-        let delta1 = (self.k / p).sqrt() - (self.r1 + self.alpha);
+        let delta1 = (self.k / p.sqrt()) - (self.r1 + self.alpha);
         if delta1 <= 0.0 {
             Default::default()
         } else {
-            let delta1_max = self.k / self.beta - (self.r1 + self.alpha);
+            let delta1_max = self.k.powi(2) / self.beta - (self.r1 + self.alpha);
             if delta1 >= delta1_max {
                 (delta1_max, self.r2)
             } else {
-                let delta2 = (self.r2 + self.beta) - (self.k * p).sqrt();
+                let delta2 = (self.r2 + self.beta) - (self.k * p.sqrt());
                 (delta1, delta2)
             }
         }
