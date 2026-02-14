@@ -61,7 +61,7 @@ impl Market for UniswapV3 {
                     alpha,
                     beta,
                     k / p_cur.sqrt() - alpha,
-                    k * p_cur.sqrt() + beta,
+                    k * p_cur.sqrt() - beta,
                 );
                 let (delta0, delta1) = range.arbitrage_pos(p / self.fee);
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
@@ -155,5 +155,48 @@ impl BoundedLiquidity {
                 (delta1, delta2)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ndarray::arr1;
+
+    use super::{Market, UniswapV3};
+
+    fn allclose(x: [f64; 2], y: [f64; 2]) -> bool {
+        arr1(&x).abs_diff_eq(&arr1(&y), 1e-10)
+    }
+
+    #[test]
+    fn uniswap_v3_arb_neg() {
+        let pool = UniswapV3::new(
+            3.872983346207417,
+            1,
+            vec![34014, 29959, 23027, 16095],
+            vec![1.0, 1.4142135623730951, 1.224744871391589, 0.0],
+            0.997,
+        );
+
+        let (input, output) = pool.arbitrage([25.0, 1.0]);
+
+        assert!(allclose(input, [0.0, 1.371820235138894]));
+        assert!(allclose(output, [0.07222755758392213, 0.0]))
+    }
+
+    #[test]
+    fn uniswap_v3_arb_pos() {
+        let pool = UniswapV3::new(
+            3.872983346207417,
+            1,
+            vec![34014, 29959, 23027, 16095],
+            vec![1.0, 1.4142135623730951, 1.224744871391589, 0.0],
+            0.997,
+        );
+
+        let (input, output) = pool.arbitrage([10.0, 1.0]);
+
+        assert!(allclose(input, [0.08163881601325118, 0.0]));
+        assert!(allclose(output, [0.0, 0.9983662848277683]))
     }
 }

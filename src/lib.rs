@@ -1,5 +1,5 @@
 use argmin::core::{CostFunction, Gradient};
-use ndarray::{Array1, Ix};
+use ndarray::Array1;
 
 use crate::{
     market::Market,
