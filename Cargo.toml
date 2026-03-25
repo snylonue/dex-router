@@ -9,7 +9,8 @@ alloy-contract = "1.6.1"
 alloy-sol-types = "1.5.4"
 anyhow = "1.0.100"
 argmin = "0.11.0"
+argmin-math = { version = "0.5.1", features = ["ndarray_latest-nolinalg"] }
 bigdecimal = "0.4.10"
-ndarray = { version = "0.17.2", features = ["approx"] }
+ndarray = { version = "0.16", features = ["approx"] }
 ruint = { version = "1.17.2", features = ["bigdecimal"] }
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }

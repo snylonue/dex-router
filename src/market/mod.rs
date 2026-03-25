@@ -18,16 +18,11 @@ impl UniswapV3 {
     pub fn new(current_price: f64, lower_prices: Vec<f64>, liquidity: Vec<f64>, fee: f64) -> Self {
         Self {
             current_price,
-            current_tick: {
-                let reversed = {
-                    let mut r = lower_prices.clone();
-                    r.reverse();
-                    r
-                };
-                match reversed.binary_search_by(|&f| f.total_cmp(&current_price)) {
-                    Ok(idx) => idx,
-                    Err(idx) => idx - 1,
-                }
+            current_tick: match lower_prices
+                .binary_search_by(|&f| f.total_cmp(&current_price).reverse())
+            {
+                Ok(idx) => idx,
+                Err(idx) => idx - 1,
             },
             lower_prices,
             liquidity,
@@ -97,13 +92,8 @@ impl Market for UniswapV3 {
                 } else {
                     self.current_price
                 };
-                let range = BoundedLiquidity::new(
-                    k,
-                    beta,
-                    alpha,
-                    k * p_cur - beta,
-                    k / p_cur - alpha,
-                );
+                let range =
+                    BoundedLiquidity::new(k, beta, alpha, k * p_cur - beta, k / p_cur - alpha);
                 let (delta0, delta1) = range.arbitrage_pos(1.0 / (self.fee * p));
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
                     break;
