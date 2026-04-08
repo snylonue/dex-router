@@ -58,9 +58,15 @@ mod tests {
 
     use crate::{
         Route,
-        market::UniswapV2,
+        market::{Market, UniswapV2, UniswapV3},
         utility::{NonnegativeLinear, Utility},
     };
+
+    impl<M: Market + ?Sized> Market for Box<M> {
+        fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
+            (**self).arbitrage(v)
+        }
+    }
 
     #[test]
     fn route_gradient_matches_finite_difference_uniswap_v2() {
@@ -72,6 +78,38 @@ mod tests {
         // Keep this far from any no-trade boundary to avoid non-smooth points.
         // Also keep it strictly feasible for the indicator utility (v >= c).
         let v = arr1(&[2.0, 1.5]);
+        let g = route.gradient(&v).unwrap();
+
+        let eps = 1e-6;
+        for i in 0..2 {
+            let mut vp = v.clone();
+            let mut vm = v.clone();
+            vp[i] += eps;
+            vm[i] -= eps;
+            let cp = route.cost(&vp).unwrap();
+            let cm = route.cost(&vm).unwrap();
+            let g_fd = (cp - cm) / (2.0 * eps);
+            assert!((g[i] - g_fd).abs() <= 1e-4);
+        }
+    }
+
+    #[test]
+    fn route_gradient_matches_finite_difference_mixed_v2_v3() {
+        let route = Route {
+            objective: Utility(NonnegativeLinear { c: arr1(&[1.0, 1.0]) }),
+            markets: vec![
+                (Box::new(UniswapV2::new(5.0, 10.0, 0.997)) as Box<dyn Market>, (0, 1)),
+                (
+                    Box::new(UniswapV3::new(0.75, vec![1.0, 0.5], vec![10.0], 0.997))
+                        as Box<dyn Market>,
+                    (0, 1),
+                ),
+            ],
+        };
+
+        // Stay strictly inside the feasible utility region and away from the
+        // no-trade boundaries for both pools.
+        let v = arr1(&[1.2, 1.1]);
         let g = route.gradient(&v).unwrap();
 
         let eps = 1e-6;
