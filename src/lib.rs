@@ -50,3 +50,40 @@ impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
         Ok(g)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use argmin::core::{CostFunction, Gradient};
+    use ndarray::arr1;
+
+    use crate::{
+        Route,
+        market::UniswapV2,
+        utility::{NonnegativeLinear, Utility},
+    };
+
+    #[test]
+    fn route_gradient_matches_finite_difference_uniswap_v2() {
+        let route = Route {
+            objective: Utility(NonnegativeLinear { c: arr1(&[1.0, 1.0]) }),
+            markets: vec![(UniswapV2::new(10.0, 10.0, 0.997), (0, 1))],
+        };
+
+        // Keep this far from any no-trade boundary to avoid non-smooth points.
+        // Also keep it strictly feasible for the indicator utility (v >= c).
+        let v = arr1(&[2.0, 1.5]);
+        let g = route.gradient(&v).unwrap();
+
+        let eps = 1e-6;
+        for i in 0..2 {
+            let mut vp = v.clone();
+            let mut vm = v.clone();
+            vp[i] += eps;
+            vm[i] -= eps;
+            let cp = route.cost(&vp).unwrap();
+            let cm = route.cost(&vm).unwrap();
+            let g_fd = (cp - cm) / (2.0 * eps);
+            assert!((g[i] - g_fd).abs() <= 1e-4);
+        }
+    }
+}

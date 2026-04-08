@@ -2,6 +2,75 @@ pub trait Market {
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]);
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct UniswapV2 {
+    /// Reserves for token0 and token1.
+    reserves: [f64; 2],
+    /// Multiplicative fee factor on input (e.g. 0.997 for a 0.3% fee).
+    fee: f64,
+}
+
+impl UniswapV2 {
+    pub fn new(reserve0: f64, reserve1: f64, fee: f64) -> Self {
+        debug_assert!(reserve0 >= 0.0);
+        debug_assert!(reserve1 >= 0.0);
+        debug_assert!(fee > 0.0 && fee <= 1.0);
+        Self {
+            reserves: [reserve0, reserve1],
+            fee,
+        }
+    }
+}
+
+impl Market for UniswapV2 {
+    fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
+        // Following the same convention as the UniswapV3 implementation:
+        // - v is a valuation / marginal utility vector.
+        // - we compute the optimal "effective" input that enters the CFMM invariant.
+        // - then divide by fee to return the actual input paid by the trader.
+        let [v0, v1] = v;
+        let [x, y] = self.reserves;
+
+        if !(v0.is_finite()
+            && v1.is_finite()
+            && x.is_finite()
+            && y.is_finite()
+            && self.fee.is_finite())
+        {
+            return Default::default();
+        }
+        if v0 <= 0.0 || v1 <= 0.0 || x <= 0.0 || y <= 0.0 || self.fee <= 0.0 {
+            return Default::default();
+        }
+
+        let p = v0 / v1;
+        let p0 = y / x; // pool marginal price for token0 in token1 (no-fee)
+
+        // If token0 is cheap externally (p low), buy it externally and sell token0 into the pool.
+        if p < p0 * self.fee {
+            // effective input that moves the invariant: a = fee * amount_in
+            let a = (x * y * self.fee / p).sqrt() - x;
+            if a <= f64::EPSILON {
+                return Default::default();
+            }
+            let out1 = y * a / (x + a);
+            let in0 = a / self.fee;
+            ([in0, 0.0], [0.0, out1])
+        // If token0 is expensive externally (p high), sell token1 into the pool to receive token0.
+        } else if p > p0 / self.fee {
+            let a = (x * y * p * self.fee).sqrt() - y;
+            if a <= f64::EPSILON {
+                return Default::default();
+            }
+            let out0 = x * a / (y + a);
+            let in1 = a / self.fee;
+            ([0.0, in1], [out0, 0.0])
+        } else {
+            Default::default()
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct UniswapV3 {
     // sqrt of current price
@@ -151,7 +220,7 @@ impl BoundedLiquidity {
 mod tests {
     use ndarray::arr1;
 
-    use super::{Market, UniswapV3};
+    use super::{Market, UniswapV2, UniswapV3};
 
     fn allclose(x: [f64; 2], y: [f64; 2]) -> bool {
         arr1(&x).abs_diff_eq(&arr1(&y), 1e-4)
@@ -195,5 +264,52 @@ mod tests {
 
         assert!(allclose(input, [0.08163881601325118, 0.0]));
         assert!(allclose(output, [0.0, 0.9983662848277683]))
+    }
+
+    #[test]
+    fn uniswap_v2_arb_token0_in() {
+        let pool = UniswapV2::new(10.0, 10.0, 0.997);
+        let (input, output) = pool.arbitrage([0.8, 1.0]);
+        assert!(allclose(input, [1.167057954747296, 0.0]));
+        assert!(allclose(output, [0.0, 1.0422814195522145]));
+    }
+
+    #[test]
+    fn uniswap_v2_arb_token1_in() {
+        let pool = UniswapV2::new(10.0, 10.0, 0.997);
+        let (input, output) = pool.arbitrage([1.3, 1.0]);
+        assert!(allclose(input, [0.0, 1.3888051889315436]));
+        assert!(allclose(output, [1.2162342617354003, 0.0]));
+    }
+
+    #[test]
+    fn uniswap_v2_no_trade_band() {
+        let pool = UniswapV2::new(10.0, 10.0, 0.997);
+        let (input, output) = pool.arbitrage([1.0, 1.0]);
+        assert!(allclose(input, [0.0, 0.0]));
+        assert!(allclose(output, [0.0, 0.0]));
+    }
+
+    #[test]
+    fn uniswap_v2_price_aligns_after_trade() {
+        let pool = UniswapV2::new(10.0, 10.0, 0.997);
+
+        // Token0 -> Token1 direction.
+        let v = [0.8, 1.0];
+        let (input, _output) = pool.arbitrage(v);
+        let a = pool.fee * input[0];
+        let x1 = pool.reserves[0] + a;
+        let y1 = pool.reserves[0] * pool.reserves[1] / x1;
+        let p_after = y1 / x1;
+        assert!((p_after - (v[0] / v[1]) / pool.fee).abs() <= 1e-10);
+
+        // Token1 -> Token0 direction.
+        let v = [1.3, 1.0];
+        let (input, _output) = pool.arbitrage(v);
+        let a = pool.fee * input[1];
+        let y1 = pool.reserves[1] + a;
+        let x1 = pool.reserves[0] * pool.reserves[1] / y1;
+        let p_after = y1 / x1;
+        assert!((p_after - (v[0] / v[1]) * pool.fee).abs() <= 1e-10);
     }
 }
