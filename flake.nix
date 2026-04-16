@@ -8,7 +8,7 @@
       let pkgs = nixpkgs.legacyPackages.${system};
       in {
         devShells.default = pkgs.mkShellNoCC {
-          packages = [ pkgs.openblas ];
+          packages = [ pkgs.openblas pkgs.codex ];
           nativeBuildInputs = [ pkgs.openblas ];
         };
       });
