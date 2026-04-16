@@ -1,2 +1,10 @@
 /target
 /.direnv
+
+/.python-version
+/.venv
+/main.py
+/pyproject.toml
+/uv.lock
+
+*.pdf
