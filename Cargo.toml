@@ -1,3 +1,9 @@
 [workspace]
+resolver = "3"
+members = ["dexrouter-arbitrage", "dexrouter-optim"]
 
-members = ["dexrouter-optim"]
+[workspace.dependencies]
+anyhow = "1.0.100"
+argmin = "0.11.0"
+bigdecimal = "0.4.10"
+ndarray = { version = "0.16", features = ["approx"] }
