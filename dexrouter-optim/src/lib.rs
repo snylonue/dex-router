@@ -102,9 +102,9 @@ mod tests {
     #[test]
     fn route_gradient_matches_finite_difference_uniswap_v2() {
         let route = Route {
-            objective: Utility(NonnegativeLinear {
+            objective: NonnegativeLinear {
                 c: arr1(&[1.0, 1.0]),
-            }),
+            },
             markets: vec![(UniswapV2::new(10.0, 10.0, 0.997), (0, 1))],
             tokens: 2,
         };
@@ -130,9 +130,9 @@ mod tests {
     #[test]
     fn route_gradient_matches_finite_difference_mixed_v2_v3() {
         let route = Route {
-            objective: Utility(NonnegativeLinear {
+            objective: NonnegativeLinear {
                 c: arr1(&[1.0, 1.0]),
-            }),
+            },
             markets: vec![
                 (
                     Box::new(UniswapV2::new(5.0, 10.0, 0.997)) as Box<dyn Market>,

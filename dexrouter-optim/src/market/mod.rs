@@ -20,42 +20,30 @@ impl UniswapV2 {
             fee,
         }
     }
+
+    fn arb_in(&self, p: f64, r: f64) -> f64 {
+        let k = self.reserves[0] * self.reserves[1];
+        (((self.fee * p * k).sqrt() - r) / self.fee).max(0.0)
+    }
+
+    fn arb_out(&self, p: f64, r: f64) -> f64 {
+        let k = self.reserves[0] * self.reserves[1];
+        (r - (k / (p * self.fee)).sqrt()).max(0.0)
+    }
 }
 
 impl Market for UniswapV2 {
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
-        // Following the same convention as the UniswapV3 implementation:
-        // - v is a valuation / marginal utility vector.
-        // - we compute the optimal "effective" input that enters the CFMM invariant.
-        // - then divide by fee to return the actual input paid by the trader.
-        let [v0, v1] = v;
-        let [x, y] = self.reserves;
-
-        let p = v0 / v1;
-        let p0 = y / x; // pool marginal price for token0 in token1 (no-fee)
-
-        // If token0 is cheap externally (p low), buy it externally and sell token0 into the pool.
-        if p < p0 * self.fee {
-            // effective input that moves the invariant: a = fee * amount_in
-            let a = (x * y * self.fee / p).sqrt() - x;
-            if a <= f64::EPSILON {
-                return Default::default();
-            }
-            let out1 = y * a / (x + a);
-            let in0 = a / self.fee;
-            ([in0, 0.0], [0.0, out1])
-        // If token0 is expensive externally (p high), sell token1 into the pool to receive token0.
-        } else if p > p0 / self.fee {
-            let a = (x * y * p * self.fee).sqrt() - y;
-            if a <= f64::EPSILON {
-                return Default::default();
-            }
-            let out0 = x * a / (y + a);
-            let in1 = a / self.fee;
-            ([0.0, in1], [out0, 0.0])
-        } else {
-            Default::default()
-        }
+        (
+            [
+                self.arb_in(v[1] / v[0], self.reserves[0]),
+                self.arb_in(v[0] / v[1], self.reserves[1]),
+            ],
+            [
+                self.arb_out(v[0] / v[1], self.reserves[0]),
+                self.arb_out(v[1] / v[0], self.reserves[1]),
+            ],
+        )
     }
 }
 
