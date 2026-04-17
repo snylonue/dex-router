@@ -31,18 +31,6 @@ impl Market for UniswapV2 {
         let [v0, v1] = v;
         let [x, y] = self.reserves;
 
-        if !(v0.is_finite()
-            && v1.is_finite()
-            && x.is_finite()
-            && y.is_finite()
-            && self.fee.is_finite())
-        {
-            return Default::default();
-        }
-        if v0 <= 0.0 || v1 <= 0.0 || x <= 0.0 || y <= 0.0 || self.fee <= 0.0 {
-            return Default::default();
-        }
-
         let p = v0 / v1;
         let p0 = y / x; // pool marginal price for token0 in token1 (no-fee)
 
@@ -71,7 +59,7 @@ impl Market for UniswapV2 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UniswapV3 {
     // sqrt of current price
     current_price: f64,
@@ -87,11 +75,16 @@ impl UniswapV3 {
     pub fn new(current_price: f64, lower_prices: Vec<f64>, liquidity: Vec<f64>, fee: f64) -> Self {
         Self {
             current_price,
-            current_tick: match lower_prices
-                .binary_search_by(|&f| f.total_cmp(&current_price).reverse())
-            {
-                Ok(idx) => idx,
-                Err(idx) => idx - 1,
+            current_tick: {
+                let reversed = {
+                    let mut r = lower_prices.clone();
+                    r.reverse();
+                    r
+                };
+                match reversed.binary_search_by(|&f| f.total_cmp(&current_price)) {
+                    Ok(idx) => idx,
+                    Err(idx) => idx - 1,
+                }
             },
             lower_prices,
             liquidity,

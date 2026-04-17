@@ -1,3 +1,5 @@
+use core::f64;
+
 use argmin::core::{CostFunction, Gradient};
 use ndarray::Array1;
 
@@ -29,6 +31,7 @@ impl<T: UtilityConjugate> Gradient for Utility<T> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct NonnegativeLinear {
     pub c: Array1<f64>,
 }
@@ -51,6 +54,36 @@ impl UtilityConjugate for NonnegativeLinear {
             Array1::zeros(shape)
         } else {
             Array1::from_elem(shape, f64::INFINITY)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BasketLiquidation {
+    pub out: usize,
+    pub inputs: Array1<f64>,
+}
+
+impl UtilityConjugate for BasketLiquidation {
+    fn value(&self, v: &Array1<f64>) -> f64 {
+        if v[self.out] >= 1.0 {
+            v.iter()
+                .zip(self.inputs.iter())
+                .enumerate()
+                .map(|(i, (vi, inputi))| if i == self.out { 0.0 } else { vi * inputi })
+                .sum()
+        } else {
+            f64::INFINITY
+        }
+    }
+
+    fn grad(&self, v: &Array1<f64>) -> Array1<f64> {
+        if v[self.out] >= 1.0 {
+            let mut g = self.inputs.clone();
+            g[self.out] = 0.0;
+            g
+        } else {
+            Array1::from_elem(self.inputs.raw_dim(), f64::INFINITY)
         }
     }
 }

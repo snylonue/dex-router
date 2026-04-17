@@ -1,17 +1,36 @@
-use argmin::core::{CostFunction, Gradient};
-use ndarray::Array1;
-
-use crate::{
-    market::Market,
-    utility::{Utility, UtilityConjugate},
+use argmin::{
+    core::{CostFunction, Executor, Gradient},
+    solver::{linesearch::MoreThuenteLineSearch, quasinewton::LBFGS},
 };
+use ndarray::{Array1, Array2};
+
+use crate::{market::Market, utility::UtilityConjugate};
 
 pub mod market;
 pub mod utility;
 
+#[derive(Debug, Clone)]
 pub struct Route<U, M> {
-    pub objective: Utility<U>,
+    pub objective: U,
     pub markets: Vec<(M, (usize, usize))>,
+    pub tokens: usize,
+}
+
+impl<U, M: Market> Route<U, M> {
+    pub fn arbitrage(&self, p: Array1<f64>) -> (Array2<f64>, Array2<f64>) {
+        let mut inputs = Array2::zeros([self.markets.len(), self.tokens]);
+        let mut outputs = Array2::zeros([self.markets.len(), self.tokens]);
+
+        for (i, (m, (idx0, idx1))) in self.markets.iter().enumerate() {
+            let (input, output) = m.arbitrage([p[*idx0], p[*idx1]]);
+            inputs[[i, *idx0]] = input[0];
+            inputs[[i, *idx1]] = input[1];
+            outputs[[i, *idx0]] = output[0];
+            outputs[[i, *idx1]] = output[1];
+        }
+
+        (inputs, outputs)
+    }
 }
 
 impl<U: UtilityConjugate, M: Market> CostFunction for Route<U, M> {
@@ -20,7 +39,7 @@ impl<U: UtilityConjugate, M: Market> CostFunction for Route<U, M> {
     type Output = f64;
 
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, anyhow::Error> {
-        Ok(self.objective.cost(param)?
+        Ok(self.objective.value(param)
             + self
                 .markets
                 .iter()
@@ -39,7 +58,7 @@ impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
     type Gradient = Array1<f64>;
 
     fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, anyhow::Error> {
-        let mut g = self.objective.gradient(param)?;
+        let mut g = self.objective.grad(param);
 
         for &(ref m, (idx0, idx1)) in &self.markets {
             let (input, output) = m.arbitrage([param[idx0], param[idx1]]);
@@ -49,6 +68,18 @@ impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
 
         Ok(g)
     }
+}
+
+pub fn solve_price<U: UtilityConjugate, M: Market>(
+    route: Route<U, M>,
+    p: Array1<f64>,
+) -> Array1<f64> {
+    let linesearch = MoreThuenteLineSearch::new();
+    let solver = LBFGS::new(linesearch, 5);
+    let executor = Executor::new(route, solver).configure(|state| state.param(p));
+    let res = executor.run().unwrap();
+
+    res.state().best_param.clone().unwrap()
 }
 
 #[cfg(test)]
@@ -71,8 +102,11 @@ mod tests {
     #[test]
     fn route_gradient_matches_finite_difference_uniswap_v2() {
         let route = Route {
-            objective: Utility(NonnegativeLinear { c: arr1(&[1.0, 1.0]) }),
+            objective: Utility(NonnegativeLinear {
+                c: arr1(&[1.0, 1.0]),
+            }),
             markets: vec![(UniswapV2::new(10.0, 10.0, 0.997), (0, 1))],
+            tokens: 2,
         };
 
         // Keep this far from any no-trade boundary to avoid non-smooth points.
@@ -96,15 +130,21 @@ mod tests {
     #[test]
     fn route_gradient_matches_finite_difference_mixed_v2_v3() {
         let route = Route {
-            objective: Utility(NonnegativeLinear { c: arr1(&[1.0, 1.0]) }),
+            objective: Utility(NonnegativeLinear {
+                c: arr1(&[1.0, 1.0]),
+            }),
             markets: vec![
-                (Box::new(UniswapV2::new(5.0, 10.0, 0.997)) as Box<dyn Market>, (0, 1)),
+                (
+                    Box::new(UniswapV2::new(5.0, 10.0, 0.997)) as Box<dyn Market>,
+                    (0, 1),
+                ),
                 (
                     Box::new(UniswapV3::new(0.75, vec![1.0, 0.5], vec![10.0], 0.997))
                         as Box<dyn Market>,
                     (0, 1),
                 ),
             ],
+            tokens: 2,
         };
 
         // Stay strictly inside the feasible utility region and away from the

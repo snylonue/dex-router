@@ -149,9 +149,9 @@ async fn _main() -> anyhow::Result<()> {
 
 fn main() {
     let route = Route {
-        objective: Utility(NonnegativeLinear {
+        objective: NonnegativeLinear {
             c: arr1(&[1.0, 1.0]),
-        }),
+        },
         markets: vec![(
             UniswapV3::new(
                 3.872983346207417,
@@ -166,6 +166,7 @@ fn main() {
             ),
             (0, 1),
         )],
+        tokens: 2
     };
 
     let linesearch = MoreThuenteLineSearch::new();
