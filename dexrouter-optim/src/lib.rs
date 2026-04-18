@@ -1,7 +1,5 @@
-use argmin::
-    core::{CostFunction, Gradient}
-;
-use lbfgsb_rs_pure::LBFGSB;
+use argmin::core::{CostFunction, Gradient};
+use lbfgsb::{LbfgsbParameter, LbfgsbProblem, LbfgsbState};
 use ndarray::{Array1, Array2, arr1};
 
 use crate::{market::Market, utility::UtilityConjugate};
@@ -70,20 +68,48 @@ impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
     }
 }
 
-pub fn solve_price<U: UtilityConjugate, M: Market>(
+pub fn solve_price_with_init_p<U: UtilityConjugate, M: Market>(
     route: Route<U, M>,
-    mut p: Array1<f64>,
+    p: Array1<f64>,
 ) -> Array1<f64> {
-    let mut solver = LBFGSB::new(17).with_pgtol(1e-5);
-    let sol = solver.minimize(p.as_slice_mut().unwrap(), route.objective.lower_bounds().as_slice().unwrap(), route.objective.upper_bounds().as_slice().unwrap(), &mut |x| {
-        let x = arr1(x);
-        let f = route.cost(&x).unwrap();
-        let g = route.gradient(&x).unwrap();
+    fn inf_or(x: f64) -> Option<f64> {
+        if x.is_infinite() { None } else { Some(x) }
+    }
 
-        (f, g.to_vec())
-    }).unwrap();
+    let mut solver = LbfgsbState::new(
+        {
+            let mut problem = LbfgsbProblem::build(p.to_vec(), |x, g| {
+                let x = arr1(x);
+                let f = route.cost(&x).unwrap();
+                g.copy_from_slice(route.gradient(&x).unwrap().as_slice().unwrap());
 
-    Array1::from_vec(sol.x)
+                Ok(f)
+            });
+            problem.set_bounds(
+                route
+                    .objective
+                    .lower_bounds()
+                    .into_iter()
+                    .zip(route.objective.upper_bounds())
+                    .map(|(lb, rb)| (inf_or(lb), inf_or(rb))),
+            );
+            problem
+        },
+        LbfgsbParameter {
+            m: 17,
+            factr: 1e1,
+            pgtol: 1e-5,
+            iprint: -1,
+        },
+    );
+    solver.minimize().unwrap();
+
+    arr1(solver.x())
+}
+
+pub fn solve_price<U: UtilityConjugate, M: Market>(route: Route<U, M>) -> Array1<f64> {
+    let tokens = route.tokens;
+    solve_price_with_init_p(route, Array1::from_elem([tokens], 1.0 / (tokens as f64)))
 }
 
 #[cfg(test)]

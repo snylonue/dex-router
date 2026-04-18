@@ -1,10 +1,7 @@
 use dexrouter_optim::{
-    Route,
-    market::UniswapV2,
-    solve_price,
-    utility::BasketLiquidation,
+    Route, market::UniswapV2, solve_price, utility::BasketLiquidation
 };
-use ndarray::{Axis, arr1, arr2, array};
+use ndarray::{Axis, arr1, arr2};
 
 #[test]
 fn liquidate() {
@@ -21,7 +18,7 @@ fn liquidate() {
         tokens: 3,
     };
 
-    let p = solve_price(route.clone(), array![1.1, 1.0, 1.0]);
+    let p = solve_price(route.clone());
 
     let (inputs, outputs) = route.arbitrage(p);
 

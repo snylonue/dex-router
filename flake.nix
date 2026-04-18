@@ -7,9 +7,11 @@
     flake-utils.lib.eachDefaultSystem (system:
       let pkgs = nixpkgs.legacyPackages.${system};
       in {
-        devShells.default = pkgs.mkShellNoCC {
-          packages = [ pkgs.openblas pkgs.codex ];
-          nativeBuildInputs = [ pkgs.openblas ];
+        devShells.default = pkgs.mkShell {
+          packages = [ pkgs.codex pkgs.clang ];
+          buildInputs = [ pkgs.openblas ];
+
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         };
       });
 }

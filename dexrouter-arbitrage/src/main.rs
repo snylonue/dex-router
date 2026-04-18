@@ -1,7 +1,3 @@
-#![feature(f128)]
-
-// extern crate blas_src;
-
 use std::str::FromStr;
 
 use alloy::{
