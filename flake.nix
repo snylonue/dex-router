@@ -1,17 +1,35 @@
 {
-  description = "Flake utils demo";
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+  };
 
-  inputs.flake-utils.url = "github:numtide/flake-utils";
+  outputs =
+    inputs@{
+      flake-parts,
+      ...
+    }:
+    flake-parts.lib.mkFlake { inherit inputs; } (
+      {
+        ...
+      }:
+      {
+        systems = [
+          "x86_64-linux"
+        ];
+        perSystem =
+          { config, pkgs, ... }:
+          {
+            devShells.default = pkgs.mkShell {
+              packages = [
+                pkgs.codex
+                pkgs.clang
+              ];
+              buildInputs = [ pkgs.openblas ];
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = nixpkgs.legacyPackages.${system};
-      in {
-        devShells.default = pkgs.mkShell {
-          packages = [ pkgs.codex pkgs.clang ];
-          buildInputs = [ pkgs.openblas ];
-
-          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-        };
-      });
+              LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+            };
+          };
+      }
+    );
 }
