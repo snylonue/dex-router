@@ -1,8 +1,8 @@
-use argmin::{
-    core::{CostFunction, Executor, Gradient},
-    solver::{linesearch::MoreThuenteLineSearch, quasinewton::LBFGS},
-};
-use ndarray::{Array1, Array2};
+use argmin::
+    core::{CostFunction, Gradient}
+;
+use lbfgsb_rs_pure::LBFGSB;
+use ndarray::{Array1, Array2, arr1};
 
 use crate::{market::Market, utility::UtilityConjugate};
 
@@ -72,14 +72,18 @@ impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
 
 pub fn solve_price<U: UtilityConjugate, M: Market>(
     route: Route<U, M>,
-    p: Array1<f64>,
+    mut p: Array1<f64>,
 ) -> Array1<f64> {
-    let linesearch = MoreThuenteLineSearch::new();
-    let solver = LBFGS::new(linesearch, 5);
-    let executor = Executor::new(route, solver).configure(|state| state.param(p));
-    let res = executor.run().unwrap();
+    let mut solver = LBFGSB::new(17).with_pgtol(1e-5);
+    let sol = solver.minimize(p.as_slice_mut().unwrap(), route.objective.lower_bounds().as_slice().unwrap(), route.objective.upper_bounds().as_slice().unwrap(), &mut |x| {
+        let x = arr1(x);
+        let f = route.cost(&x).unwrap();
+        let g = route.gradient(&x).unwrap();
 
-    res.state().best_param.clone().unwrap()
+        (f, g.to_vec())
+    }).unwrap();
+
+    Array1::from_vec(sol.x)
 }
 
 #[cfg(test)]
@@ -90,7 +94,7 @@ mod tests {
     use crate::{
         Route,
         market::{Market, UniswapV2, UniswapV3},
-        utility::{NonnegativeLinear, Utility},
+        utility::NonnegativeLinear,
     };
 
     impl<M: Market + ?Sized> Market for Box<M> {

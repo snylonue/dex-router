@@ -10,3 +10,5 @@ bigdecimal.workspace = true
 ndarray.workspace = true
 
 argmin-math = { version = "0.5.1", features = ["ndarray_latest-nolinalg"] }
+argmin-observer-slog = "0.2.0"
+lbfgsb-rs-pure = "0.1.1"

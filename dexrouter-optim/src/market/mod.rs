@@ -171,7 +171,7 @@ pub struct BoundedLiquidity {
 
 impl BoundedLiquidity {
     pub fn new(k: f64, alpha: f64, beta: f64, r1: f64, r2: f64) -> Self {
-        debug_assert!(k - (r1 + alpha) * (r2 + beta) <= f64::EPSILON);
+        debug_assert!((k * k - (r1 + alpha) * (r2 + beta)).abs() <= f64::EPSILON);
         Self {
             k,
             alpha,

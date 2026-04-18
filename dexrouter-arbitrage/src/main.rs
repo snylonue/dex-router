@@ -18,7 +18,7 @@ use bigdecimal::{BigDecimal, ToPrimitive};
 use dexrouter_optim::{
     Route,
     market::UniswapV3,
-    utility::{NonnegativeLinear, Utility},
+    utility::NonnegativeLinear,
 };
 use ndarray::arr1;
 
@@ -61,7 +61,7 @@ sol! {
 }
 
 #[derive(Debug, Default)]
-struct Data {
+struct _Data {
     pub sqrt_pl: BigDecimal,
     pub sqrt_pu: BigDecimal,
     pub sqrt_p: BigDecimal,
@@ -69,10 +69,10 @@ struct Data {
     pub reserve1: BigDecimal,
 }
 
-async fn get_current_data<P: Provider<N>, N: Network>(
+async fn _get_current_data<P: Provider<N>, N: Network>(
     pool: IUniswapV3PoolInstance<P, N>,
     provider: P,
-) -> anyhow::Result<Data> {
+) -> anyhow::Result<_Data> {
     let (
         slot0Return {
             sqrtPriceX96: sqrt_price_x96,
@@ -99,7 +99,7 @@ async fn get_current_data<P: Provider<N>, N: Network>(
     let reserve0 = liquidity * (1.0 / &p - 1.0 / &pu);
     let reserve1 = liquidity * (&p - &pl);
 
-    Ok(Data {
+    Ok(_Data {
         sqrt_pl: pl,
         sqrt_pu: pu,
         sqrt_p: p,
@@ -127,13 +127,13 @@ async fn _main() -> anyhow::Result<()> {
         provider.clone(),
     );
 
-    let Data {
+    let _Data {
         sqrt_pl,
         sqrt_pu,
         sqrt_p,
         reserve0,
         reserve1,
-    } = get_current_data(pool, provider.clone()).await?;
+    } = _get_current_data(pool, provider.clone()).await?;
 
     println!("Price (WETH/USDT): {}", sqrt_p.square().to_f64().unwrap());
     println!(
