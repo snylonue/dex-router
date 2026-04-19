@@ -63,17 +63,10 @@ impl UniswapV3 {
     pub fn new(current_price: f64, lower_prices: Vec<f64>, liquidity: Vec<f64>, fee: f64) -> Self {
         Self {
             current_price,
-            current_tick: {
-                let reversed = {
-                    let mut r = lower_prices.clone();
-                    r.reverse();
-                    r
-                };
-                match reversed.binary_search_by(|&f| f.total_cmp(&current_price)) {
-                    Ok(idx) => idx,
-                    Err(idx) => idx - 1,
-                }
-            },
+            current_tick: lower_prices
+                .partition_point(|p| p >= &current_price)
+                .checked_sub(1)
+                .unwrap_or(0),
             lower_prices,
             liquidity,
             fee,
