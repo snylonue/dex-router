@@ -29,7 +29,7 @@ fn liquidate() {
             [0.0, 0.0, 310.2106850987172],
             [10.654141916111685, 0.0, 0.0]
         ]),
-        1e-4
+        1e-5
     ));
 
     assert!(outputs.abs_diff_eq(
@@ -38,7 +38,7 @@ fn liquidate() {
             [0.0, 755.6685226743975, 0.0],
             [0.0, 0.0, 210.21069408391486]
         ]),
-        1e-4
+        1e-5
     ));
 }
 
@@ -64,6 +64,9 @@ fn liquidate_eth() -> anyhow::Result<()> {
 
     println!("{inputs}\n{outputs}");
     println!("{}", (&outputs - &inputs).sum_axis(Axis(0)));
+
+    let buy = (&outputs - &inputs).sum_axis(Axis(0))[0];
+    assert!(buy > 0.0 && buy < 10.0);
 
     Ok(())
 }
