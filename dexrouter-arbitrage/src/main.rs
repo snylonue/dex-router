@@ -37,32 +37,40 @@
 //     Ok(())
 // }
 
+use std::fs;
+
 use alloy::{
-    primitives::address,
-    providers::{ProviderBuilder, WsConnect},
+    primitives::{Address, address},
+    providers::{Provider, ProviderBuilder, WsConnect},
 };
-use dexrouter_arbitrage::{IUniswapV3Pool::IUniswapV3PoolInstance, fetch_pools};
+use dexrouter_arbitrage::{fetch_uniswap_v3_markets, fetch_uniswap_v3_static_data};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let rpc_url = "wss://ethereum-rpc.publicnode.com";
+    env_logger::init();
+
+    let rpc_url = "";
     let provider = ProviderBuilder::new()
-        .connect_ws(WsConnect::new(rpc_url))
-        .await?;
-    let pools = vec![
-        IUniswapV3PoolInstance::new(
-            address!("0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"),
-            provider.clone(),
-        ),
-        IUniswapV3PoolInstance::new(
-            address!("0xc7bBeC68d12a0d1830360F8Ec58fA599bA1b0e9b"),
-            provider.clone(),
-        ),
+        // .connect("http://127.0.0.1:8545").await
+        // .connect_anvil_with_wallet_and_config(|a| a.fork(rpc_url))
+        .connect_ws(WsConnect::new(rpc_url)).await
+        ?;
+
+    dbg!(provider.get_block_number().await?);
+
+    let pools: Vec<Address> = vec![
+        address!("0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"),
+        address!("0xc7bBeC68d12a0d1830360F8Ec58fA599bA1b0e9b"),
     ];
 
-    let pools = fetch_pools(pools, provider.clone()).await?;
+    let static_data = fetch_uniswap_v3_static_data(pools, provider.clone()).await?;
+    dbg!();
+    let markets = fetch_uniswap_v3_markets(static_data, provider.clone()).await?;
 
-    println!("{:#?}", pools);
+    println!("{:#?}", markets);
+
+    let json = serde_json::to_string(&markets)?;
+    fs::write("markets.json", &json)?;
 
     Ok(())
 }

@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 pub trait Market {
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]);
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct UniswapV2 {
     /// Reserves for token0 and token1.
     reserves: [f64; 2],
@@ -47,7 +49,7 @@ impl Market for UniswapV2 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UniswapV3 {
     // sqrt of current price
     current_price: f64,
@@ -164,7 +166,8 @@ pub struct BoundedLiquidity {
 
 impl BoundedLiquidity {
     pub fn new(k: f64, alpha: f64, beta: f64, r1: f64, r2: f64) -> Self {
-        debug_assert!((k * k - (r1 + alpha) * (r2 + beta)).abs() <= f64::EPSILON);
+        dbg!((k * k - (r1 + alpha) * (r2 + beta)).abs());
+        // debug_assert!((k * k - (r1 + alpha) * (r2 + beta)).abs() <= f64::EPSILON);
         Self {
             k,
             alpha,

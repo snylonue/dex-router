@@ -8,7 +8,11 @@ anyhow.workspace = true
 argmin.workspace = true
 bigdecimal.workspace = true
 ndarray.workspace = true
+serde.workspace = true
 
 argmin-math = { version = "0.5.1", features = ["ndarray_latest-nolinalg"] }
 argmin-observer-slog = "0.2.0"
 lbfgsb = "0.1.1"
+
+[dev-dependencies]
+serde_json.workspace = true
