@@ -24,6 +24,7 @@
               packages = [
                 pkgs.codex
                 pkgs.clang
+                pkgs.foundry
               ];
               buildInputs = [ pkgs.openblas ];
 

@@ -1,6 +1,4 @@
-use dexrouter_optim::{
-    Route, market::UniswapV2, solve_price, utility::BasketLiquidation
-};
+use dexrouter_optim::{Route, market::UniswapV2, solve_price, utility::BasketLiquidation};
 use ndarray::{Axis, arr1, arr2};
 
 #[test]
