@@ -99,13 +99,13 @@ impl Market for UniswapV3 {
                 let p_cur = if i > 0 { pu } else { self.current_price };
                 let range =
                     BoundedLiquidity::new(k, p_cur, pl);
-                let (delta0, delta1) = range.arbitrage_pos(p / self.fee.sqrt());
+                let (delta0, delta1) = range.arbitrage_pos((p / self.fee).sqrt());
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
                     break;
                 }
                 initial = false;
-                input[0] += delta0 / self.fee;
-                output[1] += delta1 / self.fee;
+                input[0] += delta0;
+                output[1] += delta1;
             }
             input[0] /= self.fee;
             (input, output)
@@ -135,13 +135,13 @@ impl Market for UniswapV3 {
                 };
                 let range =
                     BoundedLiquidity::new(k, p_cur, pu);
-                let (delta0, delta1) = range.arbitrage_neg(self.fee.sqrt() * p);
+                let (delta0, delta1) = range.arbitrage_neg((p * self.fee).sqrt());
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
                     break;
                 }
                 initial = false;
-                input[1] += delta1 / self.fee;
-                output[0] += delta0 / self.fee;
+                input[1] += delta1;
+                output[0] += delta0;
             }
             input[1] /= self.fee;
             (input, output)
@@ -166,15 +166,15 @@ impl BoundedLiquidity {
 
     /// p: sqrt(p / gamma)
     pub fn arbitrage_pos(&self, p: f64) -> (f64, f64) {
-        let delta1 = self.k * (1.0 / p - 1.0 / self.p0);
+        let delta1 = self.k * (self.p0 - p) / self.p0 / p;
         if delta1 <= f64::EPSILON {
             (0.0, 0.0)
         } else {
-            let delta1_max = self.k * (1.0 / self.p1 - 1.0 / self.p0);
+            let delta1_max = self.k * ((self.p0 - self.p1) / self.p0 / self.p1);
             if delta1 >= delta1_max {
                 (delta1_max, self.k * (self.p0 - self.p1))
             } else {
-                (delta1, self.k * (self.p1 - p))
+                (delta1, self.k * (self.p0 - p))
             }
         }
     }
@@ -187,9 +187,9 @@ impl BoundedLiquidity {
         } else {
             let delta2_max = self.k * (self.p1 - self.p0);
             if delta2 >= delta2_max {
-                (self.k * (1.0 / self.p0 - 1.0 / self.p1), delta2_max)
+                (self.k * (self.p1 - self.p0) / self.p0 / self.p1, delta2_max)
             } else {
-                (self.k * (1.0 / self.p0 - 1.0 / p), delta2)
+                (self.k * (p - self.p0) / self.p0 / p, delta2)
             }
         }
     }
@@ -221,8 +221,8 @@ mod tests {
 
         let (input, output) = pool.arbitrage([25.0, 1.0]);
 
-        assert!(allclose(input, [0.0, 1.371820235138894]));
-        assert!(allclose(output, [0.07222755758392213, 0.0]))
+        assert!(allclose(input, [0.0, 1.3718035675347677]));
+        assert!(allclose(output, [0.07222672671131006, 0.0]))
     }
 
     #[test]
