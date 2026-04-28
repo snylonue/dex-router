@@ -14,7 +14,7 @@ pub struct Route<U, M> {
     pub tokens: usize,
 }
 
-impl<U, M: Market> Route<U, M> {
+impl<U, M: Market<f64>> Route<U, M> {
     pub fn arbitrage(&self, p: Array1<f64>) -> (Array2<f64>, Array2<f64>) {
         let mut inputs = Array2::zeros([self.markets.len(), self.tokens]);
         let mut outputs = Array2::zeros([self.markets.len(), self.tokens]);
@@ -31,7 +31,7 @@ impl<U, M: Market> Route<U, M> {
     }
 }
 
-impl<U: UtilityConjugate, M: Market> CostFunction for Route<U, M> {
+impl<U: UtilityConjugate<f64>, M: Market<f64>> CostFunction for Route<U, M> {
     type Param = Array1<f64>;
 
     type Output = f64;
@@ -50,7 +50,7 @@ impl<U: UtilityConjugate, M: Market> CostFunction for Route<U, M> {
     }
 }
 
-impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
+impl<U: UtilityConjugate<f64>, M: Market<f64>> Gradient for Route<U, M> {
     type Param = Array1<f64>;
 
     type Gradient = Array1<f64>;
@@ -68,7 +68,7 @@ impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
     }
 }
 
-pub fn solve_price_with_init_p<U: UtilityConjugate, M: Market>(
+pub fn solve_price_with_init_p<U: UtilityConjugate<f64>, M: Market<f64>>(
     route: Route<U, M>,
     p: Array1<f64>,
 ) -> Array1<f64> {
@@ -107,7 +107,7 @@ pub fn solve_price_with_init_p<U: UtilityConjugate, M: Market>(
     arr1(solver.x())
 }
 
-pub fn solve_price<U: UtilityConjugate, M: Market>(route: Route<U, M>) -> Array1<f64> {
+pub fn solve_price<U: UtilityConjugate<f64>, M: Market<f64>>(route: Route<U, M>) -> Array1<f64> {
     let tokens = route.tokens;
     solve_price_with_init_p(route, Array1::from_elem([tokens], 1.0 / (tokens as f64)))
 }
@@ -123,7 +123,7 @@ mod tests {
         utility::NonnegativeLinear,
     };
 
-    impl<M: Market + ?Sized> Market for Box<M> {
+    impl<M: Market<f64> + ?Sized> Market<f64> for Box<M> {
         fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
             (**self).arbitrage(v)
         }
@@ -139,8 +139,6 @@ mod tests {
             tokens: 2,
         };
 
-        // Keep this far from any no-trade boundary to avoid non-smooth points.
-        // Also keep it strictly feasible for the indicator utility (v >= c).
         let v = arr1(&[2.0, 1.5]);
         let g = route.gradient(&v).unwrap();
 
@@ -165,20 +163,18 @@ mod tests {
             },
             markets: vec![
                 (
-                    Box::new(UniswapV2::new(5.0, 10.0, 0.997)) as Box<dyn Market>,
+                    Box::new(UniswapV2::new(5.0, 10.0, 0.997)) as Box<dyn Market<f64>>,
                     (0, 1),
                 ),
                 (
                     Box::new(UniswapV3::new(0.75, vec![1.0, 0.5], vec![10.0], 0.997))
-                        as Box<dyn Market>,
+                        as Box<dyn Market<f64>>,
                     (0, 1),
                 ),
             ],
             tokens: 2,
         };
 
-        // Stay strictly inside the feasible utility region and away from the
-        // no-trade boundaries for both pools.
         let v = arr1(&[1.2, 1.1]);
         let g = route.gradient(&v).unwrap();
 

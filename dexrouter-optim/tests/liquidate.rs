@@ -4,7 +4,7 @@ use ndarray::{Axis, arr1, arr2};
 #[test]
 fn liquidate() {
     let route = Route {
-        objective: BasketLiquidation {
+        objective: BasketLiquidation::<f64> {
             out: 0,
             inputs: arr1(&[0.0, 1e1, 1e2]),
         },
@@ -44,10 +44,10 @@ fn liquidate() {
 
 #[test]
 fn liquidate_eth() -> anyhow::Result<()> {
-    let markets: Vec<UniswapV3> = serde_json::from_str(include_str!("./markets.json"))?;
+    let markets: Vec<UniswapV3<f64>> = serde_json::from_str(include_str!("./markets.json"))?;
 
     let route = Route {
-        objective: BasketLiquidation {
+        objective: BasketLiquidation::<f64> {
             out: 0,
             inputs: arr1(&[0.0, 1908.74, 2754.99]),
         },

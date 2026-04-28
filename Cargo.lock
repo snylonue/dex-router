@@ -1696,6 +1696,7 @@ dependencies = [
  "bigdecimal",
  "lbfgsb",
  "ndarray",
+ "num-traits",
  "serde",
  "serde_json",
 ]

@@ -253,7 +253,7 @@ pub async fn fetch_pools<P: Provider<N>, N: Network>(
 pub async fn fetch_uniswap_v3_markets<P: Provider<N>, N: Network>(
     pools: Vec<UniswapV3PoolStaticData>,
     provider: P,
-) -> anyhow::Result<Vec<UniswapV3>> {
+) -> anyhow::Result<Vec<UniswapV3<f64>>> {
     let mut calls = Vec::new();
 
     for pool in &pools {
@@ -325,7 +325,7 @@ fn build_uniswap_v3_market(
     fee: u32,
     initialized_ticks: &[i32],
     liquidity_net_by_tick: &HashMap<i32, i128>,
-) -> anyhow::Result<UniswapV3> {
+) -> anyhow::Result<UniswapV3<f64>> {
     anyhow::ensure!(
         initialized_ticks.len() >= 2,
         "need at least two initialized ticks to construct a UniswapV3 market"
