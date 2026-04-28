@@ -4,7 +4,7 @@ mod uniswap {
     use dexrouter_optim::market::{Market, UniswapV3};
     use ndarray::arr1;
 
-    static MARKET: LazyLock<UniswapV3> = LazyLock::new(|| {
+    static MARKET: LazyLock<UniswapV3<f64>> = LazyLock::new(|| {
         UniswapV3::new(
             3.872983346207417,
             vec![

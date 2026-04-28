@@ -1,113 +1,95 @@
-use core::f64;
+use num_traits::Float;
 
-use argmin::core::{CostFunction, Gradient};
 use ndarray::Array1;
 
-pub struct Utility<T>(pub T);
+pub trait UtilityConjugate<F: Float> {
+    fn value(&self, v: &Array1<F>) -> F;
 
-pub trait UtilityConjugate {
-    fn value(&self, v: &Array1<f64>) -> f64;
+    fn grad(&self, v: &Array1<F>) -> Array1<F>;
 
-    fn grad(&self, v: &Array1<f64>) -> Array1<f64>;
+    fn lower_bounds(&self) -> Array1<F>;
 
-    fn lower_bounds(&self) -> Array1<f64>;
-
-    fn upper_bounds(&self) -> Array1<f64>;
-}
-
-impl<T: UtilityConjugate> CostFunction for Utility<T> {
-    type Param = Array1<f64>;
-
-    type Output = f64;
-
-    fn cost(&self, param: &Self::Param) -> Result<Self::Output, anyhow::Error> {
-        Ok(self.0.value(param))
-    }
-}
-
-impl<T: UtilityConjugate> Gradient for Utility<T> {
-    type Param = Array1<f64>;
-
-    type Gradient = Array1<f64>;
-
-    fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, anyhow::Error> {
-        Ok(self.0.grad(param))
-    }
+    fn upper_bounds(&self) -> Array1<F>;
 }
 
 #[derive(Debug, Clone)]
-pub struct NonnegativeLinear {
-    pub c: Array1<f64>,
+pub struct NonnegativeLinear<F: Float> {
+    pub c: Array1<F>,
 }
 
-impl NonnegativeLinear {
-    pub fn feasible(&self, v: &Array1<f64>) -> bool {
+impl<F: Float> NonnegativeLinear<F> {
+    pub fn feasible(&self, v: &Array1<F>) -> bool {
         assert!(self.c.shape() == v.shape());
-        (&self.c - v).fold(true, |acc, &d| acc && d <= 0.0)
+        (&self.c - v).fold(true, |acc, &d| acc && d <= F::zero())
     }
 }
 
-impl UtilityConjugate for NonnegativeLinear {
-    fn value(&self, v: &Array1<f64>) -> f64 {
-        if self.feasible(v) { 0.0 } else { f64::INFINITY }
+impl<F: Float> UtilityConjugate<F> for NonnegativeLinear<F> {
+    fn value(&self, v: &Array1<F>) -> F {
+        if self.feasible(v) {
+            F::zero()
+        } else {
+            F::infinity()
+        }
     }
 
-    fn grad(&self, v: &Array1<f64>) -> Array1<f64> {
+    fn grad(&self, v: &Array1<F>) -> Array1<F> {
         let shape = v.raw_dim();
         if self.feasible(v) {
             Array1::zeros(shape)
         } else {
-            Array1::from_elem(shape, f64::INFINITY)
+            Array1::from_elem(shape, F::infinity())
         }
     }
 
-    fn lower_bounds(&self) -> Array1<f64> {
-        &self.c + Array1::from_elem(self.c.dim(), 1e-8)
+    fn lower_bounds(&self) -> Array1<F> {
+        &self.c + Array1::from_elem(self.c.dim(), F::from(1e-8).unwrap())
     }
 
-    fn upper_bounds(&self) -> Array1<f64> {
-        Array1::from_elem(self.c.dim(), f64::INFINITY)
+    fn upper_bounds(&self) -> Array1<F> {
+        Array1::from_elem(self.c.dim(), F::infinity())
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct BasketLiquidation {
+pub struct BasketLiquidation<F: Float> {
     pub out: usize,
-    pub inputs: Array1<f64>,
+    pub inputs: Array1<F>,
 }
 
-impl UtilityConjugate for BasketLiquidation {
-    fn value(&self, v: &Array1<f64>) -> f64 {
+impl<F: Float> UtilityConjugate<F> for BasketLiquidation<F> {
+    fn value(&self, v: &Array1<F>) -> F {
         assert!(v.len() == self.inputs.len());
-        if v[self.out] >= 1.0 {
+        if v[self.out] >= F::one() {
             v.iter()
                 .zip(self.inputs.iter())
                 .enumerate()
-                .map(|(i, (vi, inputi))| if i == self.out { 0.0 } else { vi * inputi })
-                .sum()
+                .fold(F::zero(), |acc, (i, (vi, inputi))| {
+                    if i == self.out { acc } else { acc + *vi * *inputi }
+                })
         } else {
-            f64::INFINITY
+            F::infinity()
         }
     }
 
-    fn grad(&self, v: &Array1<f64>) -> Array1<f64> {
-        if v[self.out] >= 1.0 {
+    fn grad(&self, v: &Array1<F>) -> Array1<F> {
+        if v[self.out] >= F::one() {
             let mut g = self.inputs.clone();
-            g[self.out] = 0.0;
+            g[self.out] = F::zero();
             g
         } else {
-            Array1::from_elem(self.inputs.raw_dim(), f64::INFINITY)
+            Array1::from_elem(self.inputs.raw_dim(), F::infinity())
         }
     }
 
-    fn lower_bounds(&self) -> Array1<f64> {
-        let mut b = Array1::from_elem(self.inputs.dim(), f64::EPSILON.sqrt());
-        b[self.out] += 1.0;
+    fn lower_bounds(&self) -> Array1<F> {
+        let mut b = Array1::from_elem(self.inputs.dim(), F::epsilon().sqrt());
+        b[self.out] = b[self.out] + F::one();
         b
     }
 
-    fn upper_bounds(&self) -> Array1<f64> {
-        Array1::from_elem(self.inputs.dim(), f64::INFINITY)
+    fn upper_bounds(&self) -> Array1<F> {
+        Array1::from_elem(self.inputs.dim(), F::infinity())
     }
 }
 
@@ -118,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_basket_liquidation() {
-        let obj = BasketLiquidation {
+        let obj = BasketLiquidation::<f64> {
             out: 0,
             inputs: array![0.0, 1.0],
         };
