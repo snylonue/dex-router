@@ -74,6 +74,12 @@ impl UniswapV3 {
             fee,
         }
     }
+
+    pub fn scaled(mut self, c0: f64, c1: f64) -> Self {
+        self.liquidity = self.liquidity.into_iter().map(|l| l * c0 * c1).collect();
+        self.lower_prices = self.lower_prices.into_iter().map(|p| p * c1 / c0).collect();
+        self
+    }
 }
 
 impl Market for UniswapV3 {
