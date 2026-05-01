@@ -104,8 +104,7 @@ impl Market for UniswapV3 {
                 let pu = prices[i];
                 let pl = prices.get(i + 1).copied().unwrap_or_default();
                 let p_cur = if i > 0 { pu } else { self.current_price };
-                let range =
-                    BoundedLiquidity::new(k, p_cur, pl);
+                let range = BoundedLiquidity::new(k, p_cur, pl);
                 let (delta0, delta1) = range.arbitrage_pos((p / self.fee).sqrt());
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
                     break;
@@ -140,8 +139,7 @@ impl Market for UniswapV3 {
                 } else {
                     self.current_price
                 };
-                let range =
-                    BoundedLiquidity::new(k, p_cur, pu);
+                let range = BoundedLiquidity::new(k, p_cur, pu);
                 let (delta0, delta1) = range.arbitrage_neg((p * self.fee).sqrt());
                 if !initial && (delta0.abs() <= f64::EPSILON || delta1.abs() <= f64::EPSILON) {
                     break;
@@ -209,7 +207,7 @@ mod tests {
     use super::{Market, UniswapV2, UniswapV3};
 
     fn allclose(x: [f64; 2], y: [f64; 2]) -> bool {
-        arr1(&x).abs_diff_eq(&arr1(&y), 1e-4)
+        arr1(&x).abs_diff_eq(&arr1(&y), 1e-12)
     }
 
     #[test]

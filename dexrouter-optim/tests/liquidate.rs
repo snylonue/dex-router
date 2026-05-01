@@ -1,4 +1,9 @@
-use dexrouter_optim::{Route, market::{UniswapV2, UniswapV3}, solve_price, utility::BasketLiquidation};
+use dexrouter_optim::{
+    Route,
+    market::{UniswapV2, UniswapV3},
+    solve_price,
+    utility::BasketLiquidation,
+};
 use ndarray::{Axis, arr1, arr2};
 
 #[test]
@@ -52,10 +57,40 @@ fn liquidate_eth() -> anyhow::Result<()> {
             inputs: arr1(&[0.0, 1908.74, 2754.99]),
         },
         markets: vec![
-            (markets[0].clone(), (1, 0)),
-            (markets[1].clone(), (0, 2))
+            (markets[0].clone().scaled(1e-3, 1e-9), (1, 0)),
+            (markets[1].clone().scaled(1e-9, 1e-3), (0, 2)),
         ],
         tokens: 3,
+    };
+
+    let p = solve_price(route.clone());
+
+    println!("{p}");
+    println!("{}", &p / p[1]);
+
+    let (inputs, outputs) = route.arbitrage(p);
+
+    println!("{inputs}\n{outputs}");
+    let net = (&outputs - &inputs).sum_axis(Axis(0));
+    println!("{} {} {}", net[0], net[1], net[2]);
+
+    let buy = net[0];
+    println!("{buy}");
+    assert!(buy > 1.0 && buy < 2.0);
+
+    Ok(())
+}
+
+#[test]
+fn swap() -> anyhow::Result<()> {
+    let markets: Vec<UniswapV3> = serde_json::from_str(include_str!("./markets.json"))?;
+    let route = Route {
+        objective: BasketLiquidation {
+            out: 0,
+            inputs: arr1(&[0.0, 1e6]),
+        },
+        markets: vec![(markets[2].clone().scaled(1e-3, 1e-3), (0, 1))],
+        tokens: 2,
     };
 
     let p = solve_price(route.clone());
@@ -63,10 +98,10 @@ fn liquidate_eth() -> anyhow::Result<()> {
     let (inputs, outputs) = route.arbitrage(p);
 
     println!("{inputs}\n{outputs}");
-    println!("{}", (&outputs - &inputs).sum_axis(Axis(0)));
+    let net_flow = (&outputs - &inputs).sum_axis(Axis(0));
+    println!("{net_flow}");
 
-    let buy = (&outputs - &inputs).sum_axis(Axis(0))[0];
-    assert!(buy > 0.0 && buy < 10.0);
+    assert!((net_flow[0] / -net_flow[1] - 1.0).abs() <= 1e-1);
 
     Ok(())
 }

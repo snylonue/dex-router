@@ -22,23 +22,30 @@ mod uniswap {
     fn uniswap_v3_1() {
         let (inputs, outputs) = MARKET.arbitrage([10.0, 1.0]);
 
-        assert!(arr1(&inputs).abs_diff_eq(&arr1(&[0.08163881601325118, 0.0]), 1e-4));
-        assert!(arr1(&outputs).abs_diff_eq(&arr1(&[0.0, 0.9983662848277683]), 1e-4));
+        assert!(arr1(&inputs).abs_diff_eq(&arr1(&[0.08163881601325118, 0.0]), 1e-8));
+        assert!(arr1(&outputs).abs_diff_eq(&arr1(&[0.0, 0.9983662848277683]), 1e-8));
     }
 
     #[test]
     fn uniswap_v3_2() {
         let (inputs, outputs) = MARKET.arbitrage([25.0, 1.0]);
 
-        assert!(arr1(&inputs).abs_diff_eq(&arr1(&[0.0, 1.3718035675347677]), 1e-4));
-        assert!(arr1(&outputs).abs_diff_eq(&arr1(&[0.07222672671131006, 0.0]), 1e-4));
+        assert!(arr1(&inputs).abs_diff_eq(&arr1(&[0.0, 1.3718035675347677]), 1e-8));
+        assert!(arr1(&outputs).abs_diff_eq(&arr1(&[0.07222672671131006, 0.0]), 1e-8));
     }
 
     #[test]
     fn uniswap_v3_3() {
         let (inputs, outputs) = MARKET.arbitrage([15.0, 1.0]);
 
-        assert!(arr1(&inputs).abs_diff_eq(&arr1(&[0.0, 0.0]), 1e-4));
-        assert!(arr1(&outputs).abs_diff_eq(&arr1(&[0.0, 0.0]), 1e-4));
+        assert!(arr1(&inputs).abs_diff_eq(&arr1(&[0.0, 0.0]), 1e-8));
+        assert!(arr1(&outputs).abs_diff_eq(&arr1(&[0.0, 0.0]), 1e-8));
+    }
+
+    #[test]
+    fn uniswap_onchain() {
+        let markets: Vec<UniswapV3> = serde_json::from_str(include_str!("./markets.json")).unwrap();
+        let (inputs, outputs) = markets[2].clone().scaled(1e-3, 1e-3).arbitrage([1.0, 1.0]);
+        dbg!(inputs, outputs);
     }
 }
