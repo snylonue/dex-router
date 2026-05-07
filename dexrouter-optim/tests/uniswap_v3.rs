@@ -1,8 +1,13 @@
 mod uniswap {
     use std::sync::LazyLock;
 
-    use dexrouter_optim::market::{Market, UniswapV3};
-    use ndarray::arr1;
+    use dexrouter_optim::{
+        Route,
+        market::{Market, UniswapV3},
+        solve_price,
+        utility::NonnegativeLinear,
+    };
+    use ndarray::{Array1, Axis, arr1};
 
     static MARKET: LazyLock<UniswapV3> = LazyLock::new(|| {
         UniswapV3::new(
@@ -47,5 +52,29 @@ mod uniswap {
         let markets: Vec<UniswapV3> = serde_json::from_str(include_str!("./markets.json")).unwrap();
         let (inputs, outputs) = markets[2].clone().scaled(1e-3, 1e-3).arbitrage([1.0, 1.0]);
         dbg!(inputs, outputs);
+
+        let route = Route {
+            objective: NonnegativeLinear {
+                c: Array1::from_elem([3], 1.0),
+            },
+            markets: vec![
+                (markets[0].clone().scaled(1e-3, 1e-9), (1, 0)),
+                (markets[1].clone().scaled(1e-9, 1e-3), (0, 2)),
+                (markets[2].clone().scaled(1e-3, 1e-3), (1, 2))
+            ],
+            tokens: 3,
+        };
+
+        let p = solve_price(route.clone());
+        println!("{p}");
+        println!("{}", &p / p[1]);
+
+        let (inputs, outputs) = route.arbitrage(p);
+
+        println!("{inputs}\n{outputs}");
+        let net = (&outputs - &inputs).sum_axis(Axis(0));
+        println!("{net}");
+
+        assert!(net.iter().all(|&v| v == 0.0));
     }
 }
