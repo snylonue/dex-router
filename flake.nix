@@ -7,6 +7,7 @@
   outputs =
     inputs@{
       flake-parts,
+      nixpkgs,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } (
@@ -18,13 +19,21 @@
           "x86_64-linux"
         ];
         perSystem =
-          { config, pkgs, ... }:
           {
+            system,
+            pkgs,
+            ...
+          }:
+          {
+            _module.args.pkgs = import nixpkgs {
+              inherit system;
+              config.allowUnfree = true;
+            };
             devShells.default = pkgs.mkShell {
               packages = [
-                pkgs.codex
                 pkgs.clang
                 pkgs.foundry
+                pkgs.claude-code
               ];
               buildInputs = [ pkgs.openblas ];
 

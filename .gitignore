@@ -1,5 +1,7 @@
 /target
+
 /.direnv
+/.envrc
 
 /.python-version
 /.venv
@@ -8,3 +10,5 @@
 /uv.lock
 
 *.pdf
+
+/.claude
