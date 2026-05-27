@@ -12,6 +12,10 @@ cargo test -p dexrouter-optim -- route_gradient  # Run a single test
 cargo +nightly fmt         # Format (edition 2024 requires nightly rustfmt)
 ```
 
+## Developmemt
+
+Use nix to run and install required tools
+
 ## Architecture
 
 This is a DEX arbitrage router that computes optimal multi-pool strategies across Uniswap V2/V3. It formulates arbitrage as **convex optimization over token prices**, solved via **L-BFGS-B** (the `lbfgsb` crate wraps the Fortran library).

@@ -34,6 +34,14 @@ impl UniswapV3 {
         self.current_price *= c1 / c0;
         self
     }
+
+    pub fn current_tick(&self) -> usize {
+        self.current_tick
+    }
+
+    pub fn lower_prices(&self) -> &[f64] {
+        &self.lower_prices
+    }
 }
 
 impl Market for UniswapV3 {
@@ -69,6 +77,11 @@ impl Market for UniswapV3 {
             input[0] /= self.fee;
             (input, output)
         } else if p > p0 / self.fee {
+            // current_price is at or below the lowest tick — no valid tick
+            // boundary below to serve as the starting point for arb_neg.
+            if self.current_tick >= self.lower_prices.len().saturating_sub(1) {
+                return Default::default();
+            }
             let prices = &self.lower_prices[1..=self.current_tick + 1];
             let liquidity = &self.liquidity[..=self.current_tick];
             let mut input = [0.0; 2];

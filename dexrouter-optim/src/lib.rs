@@ -31,22 +31,28 @@ impl<U, M: Market> Route<U, M> {
     }
 }
 
+impl<U: UtilityConjugate, M: Market> Route<U, M> {
+    pub fn utility(&self, v: &Array1<f64>) -> f64 {
+        self.objective.value(v)
+            + self
+                .markets
+                .iter()
+                .map(|&(ref m, (idx0, idx1))| {
+                    let v = [v[idx0], v[idx1]];
+                    let (input, output) = m.arbitrage(v);
+                    (output[0] * v[0] + output[1] * v[1]) - (input[0] * v[0] + input[1] * v[1])
+                })
+                .sum::<f64>()
+    }
+}
+
 impl<U: UtilityConjugate, M: Market> CostFunction for Route<U, M> {
     type Param = Array1<f64>;
 
     type Output = f64;
 
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, anyhow::Error> {
-        Ok(self.objective.value(param)
-            + self
-                .markets
-                .iter()
-                .map(|&(ref m, (idx0, idx1))| {
-                    let v = [param[idx0], param[idx1]];
-                    let (input, output) = m.arbitrage(v);
-                    (output[0] * v[0] + output[1] * v[1]) - (input[0] * v[0] + input[1] * v[1])
-                })
-                .sum::<f64>())
+        Ok(self.utility(param))
     }
 }
 
