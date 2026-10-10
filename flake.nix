@@ -33,11 +33,19 @@
               packages = [
                 pkgs.clang
                 pkgs.foundry
-                pkgs.claude-code
+                pkgs.graphviz
               ];
               buildInputs = [ pkgs.openblas ];
 
               LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
+                with pkgs;
+                [
+                  libGL
+                  libxkbcommon
+                  wayland
+                ]
+              );
             };
           };
       }
