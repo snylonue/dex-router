@@ -1,11 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["dexrouter-arbitrage", "dexrouter-optim"]
+members = ["dexrouter-arbitrage", "dexrouter-optim", "dexrouter-lbfgsb"]
 
 [workspace.dependencies]
 anyhow = "1.0.100"
 argmin = "0.11.0"
 bigdecimal = "0.4.10"
 ndarray = { version = "0.16", features = ["approx"] }
+num-traits = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
