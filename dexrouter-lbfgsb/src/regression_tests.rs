@@ -101,6 +101,101 @@ fn cauchy_point_handles_tied_breakpoints_and_small_gradients() {
     );
 }
 
+fn quadratic_model(memory: &LbfgsMemory<f64>, g: &[f64], displacement: &[f64]) -> f64 {
+    dot(g, displacement) + 0.5 * dot(displacement, &memory.hessian_product(displacement))
+}
+
+#[test]
+fn cauchy_point_stops_when_derivative_turns_positive_at_breakpoint() {
+    for sign in [-1., 1.] {
+        for finite_endpoint in [false, true] {
+            let mut memory = LbfgsMemory::new(1);
+            assert!(memory.push(vec![1_f64, 0.], vec![1., 2.]));
+            let x = [0., 0.];
+            let g = [-10. * sign, -sign];
+            let bounds = if sign > 0. {
+                [
+                    Bound::upper(1.),
+                    if finite_endpoint {
+                        Bound::upper(10.)
+                    } else {
+                        Bound::unbounded()
+                    },
+                ]
+            } else {
+                [
+                    Bound::lower(-1.),
+                    if finite_endpoint {
+                        Bound::lower(-10.)
+                    } else {
+                        Bound::unbounded()
+                    },
+                ]
+            };
+            let z = generalized_cauchy_point(&x, &g, &bounds, &memory);
+            assert_eq!(z, vec![sign, 0.1 * sign]);
+            assert!((quadratic_model(&memory, &g, &z) + 9.355).abs() < 1e-12);
+        }
+    }
+}
+
+#[test]
+fn subspace_step_truncates_from_cauchy_without_increasing_model() {
+    // Exercise both the full-space inverse recursion and the reduced-space CG.
+    for reduced in [false, true] {
+        for sign in [-1., 1.] {
+            let n = if reduced { 3 } else { 2 };
+            let mut s = vec![1_f64, -1.];
+            let mut y = vec![0.1, 0.09];
+            let mut g = vec![-sign, 0.];
+            let mut bounds = vec![
+                Bound::unbounded(),
+                if sign > 0. {
+                    Bound::lower(-0.01)
+                } else {
+                    Bound::upper(0.01)
+                },
+            ];
+            if reduced {
+                s.push(0.);
+                y.push(0.);
+                g.push(1.);
+                bounds.push(Bound::both(0., 0.));
+            }
+            let mut memory = LbfgsMemory::new(1);
+            assert!(memory.push(s, y));
+            let x = vec![0.; n];
+            let cauchy = generalized_cauchy_point(&x, &g, &bounds, &memory);
+            let candidate = subspace_minimize(&x, &g, &cauchy, &bounds, &memory);
+            assert!(
+                candidate
+                    .iter()
+                    .zip(&bounds)
+                    .all(|(&v, b)| v == b.project(v))
+            );
+            let q_cauchy = quadratic_model(&memory, &g, &cauchy);
+            let q_candidate = quadratic_model(&memory, &g, &candidate);
+            assert!(
+                q_candidate < q_cauchy,
+                "candidate={candidate:?}, q={q_candidate}, cauchy={cauchy:?}, q={q_cauchy}"
+            );
+            assert_eq!(candidate[1], -0.01 * sign);
+            // Uniform truncation, rather than independent coordinate clipping.
+            let newton: Vec<_> = memory
+                .inverse_hessian_product(&g)
+                .iter()
+                .map(|v| -v)
+                .collect();
+            let alpha0 = (candidate[0] - cauchy[0]) / (newton[0] - cauchy[0]);
+            let alpha1 = (candidate[1] - cauchy[1]) / (newton[1] - cauchy[1]);
+            assert!((alpha0 - alpha1).abs() < 1e-12);
+            if reduced {
+                assert_eq!(candidate[2], 0.);
+            }
+        }
+    }
+}
+
 #[test]
 fn scipy_floatround_fixture_keeps_cauchy_subspace_and_trials_feasible() {
     // SciPy test_setulb_floatround has a callback defined at just four Fortran iterates.

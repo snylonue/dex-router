@@ -3,8 +3,38 @@ pub mod uniswap;
 pub use uniswap::v2::UniswapV2;
 pub use uniswap::v3::UniswapV3;
 
+/// Optimal market trade and its support-function value at external prices.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MarketEvaluation {
+    pub input: [f64; 2],
+    pub output: [f64; 2],
+    pub value: f64,
+}
+
 pub trait Market {
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]);
+
+    /// Accurate support-function change using already evaluated trades.
+    fn value_change(
+        &self,
+        _v: [f64; 2],
+        _reference_v: [f64; 2],
+        trade: MarketEvaluation,
+        reference: MarketEvaluation,
+    ) -> f64 {
+        trade.value - reference.value
+    }
+
+    /// Override when a stable closed-form support value is available. Existing
+    /// market implementations remain compatible with the trade-only interface.
+    fn evaluate(&self, v: [f64; 2]) -> MarketEvaluation {
+        let (input, output) = self.arbitrage(v);
+        MarketEvaluation {
+            input,
+            output,
+            value: (output[0] - input[0]) * v[0] + (output[1] - input[1]) * v[1],
+        }
+    }
 }
 
 #[cfg(test)]

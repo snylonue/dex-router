@@ -1,5 +1,9 @@
 use dexrouter_lbfgsb::{Bound, Options, Status, minimize};
 use num_traits::{Float, FromPrimitive};
+use std::sync::Mutex;
+
+// Only the legacy reference is non-reentrant; never lock the Rust solver.
+static REFERENCE_LOCK: Mutex<()> = Mutex::new(());
 
 fn c<T: Float + FromPrimitive>(v: f64) -> T {
     T::from_f64(v).unwrap()
@@ -97,7 +101,10 @@ fn rosenbrock_active_upper_bound_matches_reference() {
                 ..Default::default()
             },
         );
-        reference.minimize().unwrap();
+        {
+            let _guard = REFERENCE_LOCK.lock().unwrap();
+            reference.minimize().unwrap();
+        }
         assert!((r.f - reference.fx()).abs() < 1e-10);
     }
 }
@@ -236,7 +243,10 @@ fn seeded_dense_spd_quadratics_match_reference() {
                 iprint: -1,
             },
         );
-        reference.minimize().unwrap();
+        {
+            let _guard = REFERENCE_LOCK.lock().unwrap();
+            reference.minimize().unwrap();
+        }
         assert!(
             (r.f - reference.fx()).abs() < 1e-9,
             "case={case}: {r:?} ref={}",

@@ -54,7 +54,12 @@ fn diagonal_matrix<T: Float + FromPrimitive + std::fmt::Debug>() {
                             let weight = c::<T>(scale * (1. + (i % 7) as f64));
                             let d = x[i] - target[i];
                             g[i] = weight * d;
-                            f = f + c::<T>(0.5) * weight * d * d;
+                            // Remove the unavoidable constrained-minimum offset.
+                            // Otherwise rounding of that constant can trigger factr=0
+                            // before this test's deliberately tight gradient tolerance.
+                            let delta = x[i] - expected[i];
+                            let best_d = expected[i] - target[i];
+                            f = f + c::<T>(0.5) * weight * delta * (delta + c::<T>(2.) * best_d);
                         }
                         Ok(f)
                     },
@@ -107,6 +112,54 @@ fn tiny_nonzero_direction_is_not_failure() {
     assert!(r.x[0].abs() <= 1e-15);
 }
 
+fn narrow_quadratics<T: Float + FromPrimitive + std::fmt::Debug>() {
+    for weight in [1e8, 1e12] {
+        for sign in [-1., 1.] {
+            for bounded in [false, true] {
+                let target = c::<T>(sign * 1e-8);
+                let weight = c::<T>(weight);
+                let mut calls = 0;
+                let options = Options::default();
+                let pgtol = options.pgtol;
+                let r = minimize(
+                    vec![T::zero()],
+                    vec![if bounded {
+                        Bound::both(c(-1.), c(1.))
+                    } else {
+                        Bound::unbounded()
+                    }],
+                    options,
+                    |x, g| {
+                        calls += 1;
+                        let d = x[0] - target;
+                        g[0] = weight * d;
+                        Ok(c::<T>(0.5) * weight * d * d)
+                    },
+                )
+                .unwrap();
+                assert_eq!(r.status, Status::ConvergedProjectedGradient, "{r:?}");
+                assert!((r.x[0] - target).abs() <= pgtol / weight, "{r:?}");
+                assert!(r.projected_gradient_inf_norm <= pgtol, "{r:?}");
+                assert_eq!(r.evaluations, calls);
+                assert!(
+                    calls <= 21,
+                    "interpolation exceeded the default first-search limit: {r:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn narrow_quadratics_converge_with_default_line_search_f64() {
+    narrow_quadratics::<f64>();
+}
+
+#[test]
+fn narrow_quadratics_converge_with_default_line_search_f32() {
+    narrow_quadratics::<f32>();
+}
+
 #[test]
 fn finite_boundary_step_can_satisfy_armijo_without_wolfe_curvature() {
     let mut calls = 0;
@@ -149,6 +202,29 @@ fn failed_search_does_not_accept_an_increasing_objective() {
     assert_eq!(r.x, vec![0.]);
     assert_eq!(r.f, 0.);
     assert_eq!(r.evaluations, calls);
+}
+
+#[test]
+fn zero_factr_still_allows_equal_value_function_reduction_stop() {
+    // A large objective offset can hide progress, even though the gradient
+    // is not small. Retain the documented Fortran-compatible factr=0 semantics.
+    let options = Options::default();
+    assert_eq!(options.factr, 0.);
+    let pgtol = options.pgtol;
+    let r = minimize(
+        vec![1_f64, 1.],
+        vec![Bound::both(-10., 10.); 2],
+        options,
+        |x, g| {
+            g[0] = 2. * x[0];
+            g[1] = x[1];
+            Ok(1e20 + x[0] * x[0] + 0.5 * x[1] * x[1])
+        },
+    )
+    .unwrap();
+    assert_eq!(r.status, Status::ConvergedFunctionReduction, "{r:?}");
+    assert!(r.projected_gradient_inf_norm > pgtol);
+    assert_eq!(r.f, 1e20);
 }
 
 #[test]

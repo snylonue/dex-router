@@ -72,6 +72,13 @@ pub(crate) fn generalized_cauchy_point<T: Float>(
         let derivative = dot(g, &direction) + dot(&displacement, &bd);
         let curvature = dot(&direction, &bd);
 
+        // Removing a blocked coordinate can make the right derivative nonnegative.
+        // The breakpoint is then the first local model minimum on the projected path.
+        if derivative >= T::zero() {
+            project_to_bounds(&mut z, bounds);
+            return z;
+        }
+
         if curvature > T::zero() {
             let minimizer_dt = -derivative / curvature;
             if minimizer_dt >= T::zero() && (next_t.is_infinite() || minimizer_dt <= dt) {

@@ -6,7 +6,7 @@ use crate::{
     cast,
     cauchy::generalized_cauchy_point,
     dot,
-    line_search::strong_wolfe,
+    line_search::{LineSearchFailure, strong_wolfe},
     memory::LbfgsMemory,
     norm_inf, sub,
     subspace::subspace_minimize,
@@ -40,7 +40,8 @@ impl<T: Float + FromPrimitive> Default for Options<T> {
 }
 
 impl<T: Float> Options<T> {
-    fn validate(&self) -> anyhow::Result<()> {
+    /// Validate task-independent parameters without evaluating a problem.
+    pub fn validate(&self) -> anyhow::Result<()> {
         anyhow::ensure!(self.memory > 0, "memory must be positive");
         anyhow::ensure!(
             self.factr.is_finite() && self.factr >= T::zero(),
@@ -83,6 +84,7 @@ pub struct OptimizeResult<T> {
     pub evaluations: usize,
     pub status: Status,
     pub projected_gradient_inf_norm: T,
+    pub line_search_failure: Option<LineSearchFailure>,
 }
 
 pub fn minimize<T, F>(
@@ -116,6 +118,7 @@ where
             evaluations,
             status: Status::ConvergedProjectedGradient,
             projected_gradient_inf_norm,
+            line_search_failure: None,
         });
     }
 
@@ -129,6 +132,7 @@ where
                 evaluations,
                 status: Status::MaxEvaluations,
                 projected_gradient_inf_norm,
+                line_search_failure: None,
             });
         }
 
@@ -150,6 +154,7 @@ where
                 evaluations,
                 status: Status::LineSearchFailed,
                 projected_gradient_inf_norm,
+                line_search_failure: Some(LineSearchFailure::NonDescentDirection),
             });
         }
 
@@ -166,6 +171,7 @@ where
                 evaluations,
                 status: Status::LineSearchFailed,
                 projected_gradient_inf_norm,
+                line_search_failure: Some(LineSearchFailure::NonDescentDirection),
             });
         }
 
@@ -223,6 +229,7 @@ where
                     Status::LineSearchFailed
                 },
                 projected_gradient_inf_norm,
+                line_search_failure: search.failure,
             });
         };
 
@@ -247,6 +254,7 @@ where
                 evaluations,
                 status: Status::ConvergedProjectedGradient,
                 projected_gradient_inf_norm,
+                line_search_failure: None,
             });
         }
 
@@ -259,6 +267,7 @@ where
                 evaluations,
                 status: Status::ConvergedFunctionReduction,
                 projected_gradient_inf_norm,
+                line_search_failure: None,
             });
         }
     }
@@ -271,6 +280,7 @@ where
         evaluations,
         status: Status::MaxIterations,
         projected_gradient_inf_norm,
+        line_search_failure: None,
     })
 }
 

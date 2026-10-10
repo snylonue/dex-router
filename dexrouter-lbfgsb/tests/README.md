@@ -45,6 +45,8 @@ stronger contract than SciPy's possible overshoot at an iteration boundary.
   objective scales 1e-6, 1, 1e6; memory 1, 5, 17 (90 combinations).
 - Unbounded, lower-only, upper-only, two-sided and fixed coordinates,
   infeasible starts, stationary starts and strict callback feasibility.
+- Narrow f32/f64 quadratics with curvature 1e8/1e12 and targets +/-1e-8,
+  both bounded and unbounded, using the default 20-trial line-search budget.
 - Tiny nonzero directions, linear boundary optima, deliberately inconsistent
   gradients, budgets 1/2/3/5/10/17 and consistent last accepted state.
 - Invalid shapes/options/bounds; NaN and infinities in objective or gradient,
@@ -64,7 +66,9 @@ stronger contract than SciPy's possible overshoot at an iteration boundary.
 Internal tests independently compare limited-memory Hessian products against
 explicit dense BFGS updates, check secant/positive-definiteness/inverse-product
 identities, scale-relative curvature acceptance, tied Cauchy breakpoints and
-Fortran projected-gradient distance clipping.
+Fortran projected-gradient distance clipping. Coupled-model counterexamples
+also check stopping at Cauchy breakpoints and uniform feasible subspace
+truncation, for upper/lower bounds and both inverse-recursion and CG paths.
 
 ## Fixes exercised
 
@@ -76,17 +80,29 @@ Fortran projected-gradient distance clipping.
 6. Normalize the first unbounded displacement; reject infinite tolerances.
 7. Check Wolfe acceptance before equal-value bracket tightening (roundoff near
    nonzero minima); use stable inverse two-loop solves when all variables are free.
+8. Stop when removing a blocked coordinate makes the Cauchy path derivative
+   nonnegative, instead of skipping that local minimum.
+9. Truncate subspace steps uniformly from the Cauchy point and reject model
+   increases, rather than clipping Newton coordinates independently.
+10. Use safeguarded interpolation in zoom so narrow quadratics do not exhaust
+    the default trial budget solely because of repeated bisection.
 
 ## Reproduce
 
-Run single-threaded because reference lbfgsb 0.1.1 is not thread-safe:
+The pure Rust solver runs without a global lock. Only calls to the legacy
+`lbfgsb` reference are serialized when multiple tests in one binary use it.
+The two concurrency tests each run 8 workers over 32 problems (f32/f64),
+synchronize inside objective callbacks, and compare solutions, gradients,
+statuses and iteration/evaluation counts exactly against serial baselines.
+
+Run with multiple test threads:
 
 ~~~sh
-cargo test -p dexrouter-lbfgsb -- --test-threads=1
-cargo test -p dexrouter-lbfgsb --release -- --test-threads=1
+cargo test -p dexrouter-lbfgsb -- --test-threads=8
+cargo test -p dexrouter-lbfgsb --release -- --test-threads=8
 cargo fmt -p dexrouter-lbfgsb -- --check
 cargo check --workspace
-cargo test --workspace -- --test-threads=1
+cargo test --workspace -- --test-threads=8
 ~~~
 
 No Python/SciPy installation or network is needed to execute the tests. The
@@ -97,8 +113,8 @@ function-reduction convergence need not imply the gradient tolerance was met.
 
 **Conditioning limitation:** very small histories can be much slower on severely
 ill-conditioned problems. With condition number 1e8, f64 and pgtol=1e-7, the
-measured debug run required 12,773 iterations at memory=5, versus 176 at the
-default memory=17. The stress test permits 20,000 iterations without loosening
-its solution/error assertions. The default 1,000-iteration budget is not a
-universal convergence guarantee; rescale variables and/or increase memory and
-budgets for such problems. Paths and evaluation counts may differ by platform.
+stress test permits 20,000 iterations without loosening its solution/error
+assertions. The default 1,000-iteration budget is not a universal convergence
+guarantee; rescale variables and/or increase memory and budgets for such
+problems. Paths and evaluation counts may differ by platform and line-search
+strategy.

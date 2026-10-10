@@ -1,10 +1,10 @@
 use argmin::core::{CostFunction, Gradient};
-use lbfgsb::{LbfgsbParameter, LbfgsbProblem, LbfgsbState};
-use ndarray::{Array1, Array2, arr1};
+use ndarray::{Array1, Array2};
 
 use crate::{market::Market, utility::UtilityConjugate};
 
 pub mod market;
+mod numerics;
 pub mod utility;
 
 #[derive(Debug, Clone)]
@@ -31,18 +31,67 @@ impl<U, M: Market> Route<U, M> {
     }
 }
 
+/// Joint evaluation, including gross per-token turnover for residual scaling.
+#[derive(Debug, Clone)]
+pub struct RouteEvaluation {
+    pub cost: f64,
+    pub gradient: Array1<f64>,
+    pub turnover: Array1<f64>,
+    pub(crate) market_evaluations: Vec<market::MarketEvaluation>,
+}
+
 impl<U: UtilityConjugate, M: Market> Route<U, M> {
+    pub fn evaluate(&self, price: &Array1<f64>) -> RouteEvaluation {
+        self.evaluate_centered(price, None).0
+    }
+
+    pub(crate) fn evaluate_centered(
+        &self,
+        price: &Array1<f64>,
+        reference: Option<(&Array1<f64>, &RouteEvaluation)>,
+    ) -> (RouteEvaluation, f64) {
+        let mut change = numerics::Sum::default();
+        if let Some((reference_price, _)) = reference {
+            change.add(self.objective.value_change(price, reference_price));
+        }
+        let mut market_evaluations = Vec::with_capacity(self.markets.len());
+        let mut cost = numerics::Sum::default();
+        cost.add(self.objective.value(price));
+        let mut gradient = vec![numerics::Sum::default(); self.tokens];
+        for (sum, &g) in gradient.iter_mut().zip(self.objective.grad(price).iter()) {
+            sum.add(g);
+        }
+        let mut turnover = vec![numerics::Sum::default(); self.tokens];
+        for (index, (market, (a, b))) in self.markets.iter().enumerate() {
+            let trade = market.evaluate([price[*a], price[*b]]);
+            cost.add(trade.value);
+            market_evaluations.push(trade);
+            if let Some((reference_price, reference)) = reference {
+                change.add(market.value_change(
+                    [price[*a], price[*b]],
+                    [reference_price[*a], reference_price[*b]],
+                    trade,
+                    reference.market_evaluations[index],
+                ));
+            }
+            for (local, token) in [*a, *b].into_iter().enumerate() {
+                gradient[token].add(trade.output[local] - trade.input[local]);
+                turnover[token].add(trade.input[local] + trade.output[local]);
+            }
+        }
+        (
+            RouteEvaluation {
+                cost: cost.total(),
+                gradient: Array1::from_iter(gradient.into_iter().map(numerics::Sum::total)),
+                turnover: Array1::from_iter(turnover.into_iter().map(numerics::Sum::total)),
+                market_evaluations,
+            },
+            change.total(),
+        )
+    }
+
     pub fn utility(&self, v: &Array1<f64>) -> f64 {
-        self.objective.value(v)
-            + self
-                .markets
-                .iter()
-                .map(|&(ref m, (idx0, idx1))| {
-                    let v = [v[idx0], v[idx1]];
-                    let (input, output) = m.arbitrage(v);
-                    (output[0] * v[0] + output[1] * v[1]) - (input[0] * v[0] + input[1] * v[1])
-                })
-                .sum::<f64>()
+        self.evaluate(v).cost
     }
 }
 
@@ -62,61 +111,15 @@ impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
     type Gradient = Array1<f64>;
 
     fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, anyhow::Error> {
-        let mut g = self.objective.grad(param);
-
-        for &(ref m, (idx0, idx1)) in &self.markets {
-            let (input, output) = m.arbitrage([param[idx0], param[idx1]]);
-            g[idx0] += output[0] - input[0];
-            g[idx1] += output[1] - input[1];
-        }
-
-        Ok(g)
+        Ok(self.evaluate(param).gradient)
     }
 }
 
-pub fn solve_price_with_init_p<U: UtilityConjugate, M: Market>(
-    route: Route<U, M>,
-    p: Array1<f64>,
-) -> Array1<f64> {
-    fn inf_or(x: f64) -> Option<f64> {
-        if x.is_infinite() { None } else { Some(x) }
-    }
-
-    let mut solver = LbfgsbState::new(
-        {
-            let mut problem = LbfgsbProblem::build(p.to_vec(), |x, g| {
-                let x = arr1(x);
-                let f = route.cost(&x).unwrap();
-                g.copy_from_slice(route.gradient(&x).unwrap().as_slice().unwrap());
-
-                Ok(f)
-            });
-            problem.set_bounds(
-                route
-                    .objective
-                    .lower_bounds()
-                    .into_iter()
-                    .zip(route.objective.upper_bounds())
-                    .map(|(lb, rb)| (inf_or(lb), inf_or(rb))),
-            );
-            problem
-        },
-        LbfgsbParameter {
-            m: 17,
-            factr: 1e1,
-            pgtol: 1e-5,
-            iprint: -1,
-        },
-    );
-    solver.minimize().unwrap();
-
-    arr1(solver.x())
-}
-
-pub fn solve_price<U: UtilityConjugate, M: Market>(route: Route<U, M>) -> Array1<f64> {
-    let tokens = route.tokens;
-    solve_price_with_init_p(route, Array1::from_elem([tokens], 1.0 / (tokens as f64)))
-}
+mod solver;
+pub use solver::{
+    SolveAssessment, SolveDiagnostics, SolveOptions, solve_price, solve_price_with_init_p,
+    solve_price_with_init_p_checked, solve_price_with_options,
+};
 
 #[cfg(test)]
 mod tests {

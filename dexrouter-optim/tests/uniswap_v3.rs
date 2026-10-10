@@ -60,7 +60,7 @@ mod uniswap {
             markets: vec![
                 (markets[0].clone().scaled(1e-3, 1e-9), (1, 0)),
                 (markets[1].clone().scaled(1e-9, 1e-3), (0, 2)),
-                (markets[2].clone().scaled(1e-3, 1e-3), (1, 2))
+                (markets[2].clone().scaled(1e-3, 1e-3), (1, 2)),
             ],
             tokens: 3,
         };

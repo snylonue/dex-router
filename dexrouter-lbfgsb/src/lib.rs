@@ -8,6 +8,7 @@ mod solver;
 mod subspace;
 
 pub use bounds::Bound;
+pub use line_search::LineSearchFailure;
 pub use solver::{OptimizeResult, Options, Status, minimize};
 
 use num_traits::{Float, FromPrimitive};

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::market::Market;
+use crate::market::{Market, MarketEvaluation};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct UniswapV2 {
@@ -20,30 +20,61 @@ impl UniswapV2 {
             fee,
         }
     }
-
-    fn arb_in(&self, p: f64, r: f64) -> f64 {
-        let k = self.reserves[0] * self.reserves[1];
-        (((self.fee * p * k).sqrt() - r) / self.fee).max(0.0)
-    }
-
-    fn arb_out(&self, p: f64, r: f64) -> f64 {
-        let k = self.reserves[0] * self.reserves[1];
-        (r - (k / (p * self.fee)).sqrt()).max(0.0)
-    }
 }
 
 impl Market for UniswapV2 {
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
-        (
-            [
-                self.arb_in(v[1] / v[0], self.reserves[0]),
-                self.arb_in(v[0] / v[1], self.reserves[1]),
-            ],
-            [
-                self.arb_out(v[0] / v[1], self.reserves[0]),
-                self.arb_out(v[1] / v[0], self.reserves[1]),
-            ],
-        )
+        let trade = self.evaluate(v);
+        (trade.input, trade.output)
+    }
+
+    fn value_change(
+        &self,
+        v: [f64; 2],
+        reference_v: [f64; 2],
+        trade: MarketEvaluation,
+        reference: MarketEvaluation,
+    ) -> f64 {
+        let direction = |t: MarketEvaluation| {
+            if t.input[0] > 0.0 {
+                1
+            } else if t.input[1] > 0.0 {
+                -1
+            } else {
+                0
+            }
+        };
+        if direction(trade) == direction(reference) {
+            let linear = (reference.output[0] - reference.input[0]) * (v[0] - reference_v[0])
+                + (reference.output[1] - reference.input[1]) * (v[1] - reference_v[1]);
+            if direction(trade) == 0 {
+                return linear;
+            }
+            let curvature = self.reserves[0].sqrt() * self.reserves[1].sqrt() / self.fee.sqrt();
+            linear + curvature * super::support_remainder(v, reference_v)
+        } else {
+            trade.value - reference.value
+        }
+    }
+
+    fn evaluate(&self, v: [f64; 2]) -> MarketEvaluation {
+        let mut trade = MarketEvaluation::default();
+        // In the active direction the optimized payoff is a squared difference
+        // of square roots, not the difference of two large trade valuations.
+        let weighted = [self.reserves[0] * v[0], self.reserves[1] * v[1]];
+        for (input, output) in [(0, 1), (1, 0)] {
+            if weighted[output] * self.fee > weighted[input] {
+                let root_out = weighted[output].sqrt();
+                let root_in = (weighted[input] / self.fee).sqrt();
+                let difference =
+                    (weighted[output] - weighted[input] / self.fee) / (root_out + root_in);
+                trade.input[input] = (self.reserves[input] / self.fee) * (difference / root_in);
+                trade.output[output] = self.reserves[output] * (difference / root_out);
+                trade.value = difference * difference;
+                break;
+            }
+        }
+        trade
     }
 }
 

@@ -10,9 +10,21 @@ pub trait UtilityConjugate {
 
     fn grad(&self, v: &Array1<f64>) -> Array1<f64>;
 
+    /// Stable change in value for a centered objective.
+    fn value_change(&self, v: &Array1<f64>, reference: &Array1<f64>) -> f64 {
+        self.value(v) - self.value(reference)
+    }
+
     fn lower_bounds(&self) -> Array1<f64>;
 
     fn upper_bounds(&self) -> Array1<f64>;
+
+    /// Optional normalization for a nonnegative, degree-one homogeneous dual.
+    /// The utility must guarantee that fixing this price to its lower bound
+    /// preserves the mathematical optimum. Numerical floors are separate.
+    fn price_anchor(&self) -> Option<(usize, f64)> {
+        None
+    }
 }
 
 impl<T: UtilityConjugate> CostFunction for Utility<T> {
@@ -62,11 +74,17 @@ impl UtilityConjugate for NonnegativeLinear {
     }
 
     fn lower_bounds(&self) -> Array1<f64> {
-        &self.c + Array1::from_elem(self.c.dim(), 1e-8)
+        self.c.clone()
     }
 
     fn upper_bounds(&self) -> Array1<f64> {
         Array1::from_elem(self.c.dim(), f64::INFINITY)
+    }
+
+    fn price_anchor(&self) -> Option<(usize, f64)> {
+        let mut nonzero = self.c.iter().enumerate().filter(|(_, c)| **c != 0.0);
+        let (index, &price) = nonzero.next()?;
+        (price > 0.0 && price.is_finite() && nonzero.next().is_none()).then_some((index, price))
     }
 }
 
@@ -77,6 +95,19 @@ pub struct BasketLiquidation {
 }
 
 impl UtilityConjugate for BasketLiquidation {
+    fn value_change(&self, v: &Array1<f64>, reference: &Array1<f64>) -> f64 {
+        if v[self.out] < 1.0 || reference[self.out] < 1.0 {
+            return f64::INFINITY;
+        }
+        let mut sum = crate::numerics::Sum::default();
+        for i in 0..v.len() {
+            if i != self.out {
+                sum.add((v[i] - reference[i]) * self.inputs[i]);
+            }
+        }
+        sum.total()
+    }
+
     fn value(&self, v: &Array1<f64>) -> f64 {
         assert!(v.len() == self.inputs.len());
         if v[self.out] >= 1.0 {
@@ -101,13 +132,20 @@ impl UtilityConjugate for BasketLiquidation {
     }
 
     fn lower_bounds(&self) -> Array1<f64> {
-        let mut b = Array1::from_elem(self.inputs.dim(), f64::EPSILON.sqrt());
-        b[self.out] += 1.0;
+        let mut b = Array1::zeros(self.inputs.dim());
+        b[self.out] = 1.0;
         b
     }
 
     fn upper_bounds(&self) -> Array1<f64> {
         Array1::from_elem(self.inputs.dim(), f64::INFINITY)
+    }
+
+    fn price_anchor(&self) -> Option<(usize, f64)> {
+        self.inputs
+            .iter()
+            .all(|x| x.is_finite() && *x >= 0.0)
+            .then_some((self.out, 1.0))
     }
 }
 

@@ -45,17 +45,24 @@ Algorithm 778 computes the search direction in two stages.
    `pgtol`.
 2. Compute the generalized Cauchy point along the projected steepest descent
    path `P(x - t g)`. This identifies variables that should remain fixed at
-   bounds for the current quadratic model.
+   bounds for the current quadratic model. Stop at a breakpoint if the new
+   right directional derivative is nonnegative.
 3. Minimize the quadratic model approximately over the free variables while
    keeping active variables fixed. This crate uses the primal subspace view:
-   solve the reduced Newton equation with the limited-memory Hessian product
-   and clip the candidate to the feasible box. When every variable is free,
-   apply the inverse model with the stable two-loop recursion instead of CG.
+   solve the reduced Newton equation with the limited-memory Hessian product.
+   Truncate the step from the Cauchy point with a single feasible step length;
+   independent coordinate clipping can increase a coupled quadratic. Check the
+   actual model change and fall back to the Cauchy point if it is non-finite or
+   positive. When every variable is free, compute the Newton target with the
+   stable two-loop inverse recursion instead of CG.
 4. Use a strong-Wolfe line search along the resulting feasible direction. The
    step length is capped by the largest step that remains inside the box.
    At a finite feasible endpoint, Armijo decrease and a negative directional
    derivative suffice: a constrained minimum need not satisfy Wolfe curvature.
    The first displacement is normalized when any coordinate is unbounded.
+   Zoom uses safeguarded quadratic interpolation, with a derivative-secant
+   fallback when slopes bracket a root and bisection when interpolation is
+   unusable. Trials are limited to the interior 10%--90% of the bracket.
 5. Accept the new point, update the correction memory when `y^T s` is
    sufficiently positive, and otherwise skip the update. If the direction is
    not a descent direction or line search fails after a memory reset, terminate
