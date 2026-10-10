@@ -5,6 +5,7 @@ use crate::{market::Market, utility::UtilityConjugate};
 
 pub mod market;
 mod numerics;
+pub mod snapshot;
 pub mod utility;
 
 #[derive(Debug, Clone)]

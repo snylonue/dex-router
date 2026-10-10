@@ -218,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    fn matches_existing_lbfgsb_on_small_quadratic() {
+    fn small_quadratic_matches_analytic_minimum() {
         let bounds = vec![Bound::both(-5.0_f64, 5.0), Bound::both(-5.0, 5.0)];
         let options = Options {
             pgtol: 1e-8,
@@ -232,27 +232,8 @@ mod tests {
         )
         .unwrap();
 
-        let mut problem = lbfgsb::LbfgsbProblem::build(vec![0.0_f64, 0.0], |x, g| {
-            let dx = x[0] - 2.0;
-            let dy = x[1] + 1.0;
-            g[0] = dx;
-            g[1] = dy;
-            Ok(0.5 * (dx * dx + dy * dy))
-        });
-        problem.set_bounds(vec![(Some(-5.0), Some(5.0)), (Some(-5.0), Some(5.0))]);
-        let mut state = lbfgsb::LbfgsbState::new(
-            problem,
-            lbfgsb::LbfgsbParameter {
-                m: 17,
-                factr: 0.0,
-                pgtol: 1e-8,
-                iprint: -1,
-            },
-        );
-        state.minimize().unwrap();
-
-        assert!((ours.x[0] - state.x()[0]).abs() < 1e-7);
-        assert!((ours.x[1] - state.x()[1]).abs() < 1e-7);
-        assert!((ours.f - state.fx()).abs() < 1e-12);
+        assert!((ours.x[0] - 2.0).abs() < 1e-7);
+        assert!((ours.x[1] + 1.0).abs() < 1e-7);
+        assert!(ours.f.abs() < 1e-12);
     }
 }

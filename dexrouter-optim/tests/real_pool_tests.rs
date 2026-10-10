@@ -1,14 +1,26 @@
-//! Offline regressions against the optional local Ethereum snapshot.
-use super::*;
-use dexrouter_optim::{SolveAssessment, market::Market};
+//! Offline regressions against the bundled Ethereum pool snapshot.
+use std::fs;
+
+use dexrouter_optim::{
+    SolveAssessment, SolveOptions,
+    market::Market,
+    snapshot::{RawUniswapV3Pool, build_full_market_route_with_tvl},
+    solve_price_with_options,
+    utility::UtilityConjugate,
+};
+
+const SNAPSHOT_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/uniswap_v3_pools.json",
+);
 
 fn snapshot() -> Vec<RawUniswapV3Pool> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../uniswap_v3_pools.json");
-    serde_json::from_reader(fs::File::open(path).expect("local pool snapshot")).unwrap()
+    let path = SNAPSHOT_PATH;
+    serde_json::from_reader(fs::File::open(path).expect("bundled pool snapshot")).unwrap()
 }
 
 #[test]
-#[ignore = "requires local uniswap_v3_pools.json; real-pool residual regression"]
+#[ignore = "expensive bundled-snapshot regression; run with --release --ignored"]
 fn real_pool_residuals() {
     let pools = snapshot();
     for (label, cutoff, absolute_residual_value) in [
@@ -89,7 +101,7 @@ fn add((sum, correction): &mut (f64, f64), value: f64) {
 }
 
 #[test]
-#[ignore = "requires local pool snapshot; diagnoses full-market floating-point precision"]
+#[ignore = "expensive bundled-snapshot floating-point precision diagnosis"]
 fn diagnose_full_market_price_precision() {
     let full = build_full_market_route_with_tvl(snapshot(), 0.0).unwrap();
     let options = SolveOptions::default();

@@ -1,9 +1,5 @@
 use dexrouter_lbfgsb::{Bound, Options, Status, minimize};
 use num_traits::{Float, FromPrimitive};
-use std::sync::Mutex;
-
-// Only the legacy reference is non-reentrant; never lock the Rust solver.
-static REFERENCE_LOCK: Mutex<()> = Mutex::new(());
 
 fn c<T: Float + FromPrimitive>(v: f64) -> T {
     T::from_f64(v).unwrap()
@@ -72,7 +68,7 @@ fn rosenbrock_multistart_f32() {
 }
 
 #[test]
-fn rosenbrock_active_upper_bound_matches_reference() {
+fn rosenbrock_active_upper_bound_matches_analytic_minimum() {
     for start in [vec![-1.2, 1.], vec![0., 0.], vec![5., -5.]] {
         let bounds = vec![Bound::both(-2., 0.8), Bound::unbounded()];
         let r = minimize(
@@ -91,21 +87,6 @@ fn rosenbrock_active_upper_bound_matches_reference() {
             "{r:?}"
         );
         assert!((r.f - 0.04).abs() < 1e-10, "{r:?}");
-        let mut problem = lbfgsb::LbfgsbProblem::build(start, rosen::<f64>);
-        problem.set_bounds(bounds.iter().map(|b| (b.lower, b.upper)));
-        let mut reference = lbfgsb::LbfgsbState::new(
-            problem,
-            lbfgsb::LbfgsbParameter {
-                pgtol: 1e-7,
-                factr: 0.,
-                ..Default::default()
-            },
-        );
-        {
-            let _guard = REFERENCE_LOCK.lock().unwrap();
-            reference.minimize().unwrap();
-        }
-        assert!((r.f - reference.fx()).abs() < 1e-10);
     }
 }
 
@@ -188,7 +169,7 @@ fn ill_conditioned_quadratic() {
 }
 
 #[test]
-fn seeded_dense_spd_quadratics_match_reference() {
+fn seeded_dense_spd_quadratics_satisfy_optimality_bounds() {
     let mut seed = 123456789_u64;
     let mut rand = || {
         seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
@@ -232,32 +213,34 @@ fn seeded_dense_spd_quadratics_match_reference() {
         )
         .unwrap();
         assert!(is_success(r.status), "case={case}: {r:?}");
-        let mut problem = lbfgsb::LbfgsbProblem::build(start, fg);
-        problem.set_bounds(bounds.iter().map(|b| (b.lower, b.upper)));
-        let mut reference = lbfgsb::LbfgsbState::new(
-            problem,
-            lbfgsb::LbfgsbParameter {
-                m: 17,
-                factr: 0.,
-                pgtol: 1e-8,
-                iprint: -1,
-            },
-        );
-        {
-            let _guard = REFERENCE_LOCK.lock().unwrap();
-            reference.minimize().unwrap();
-        }
+        assert!(r.x.iter().zip(&bounds).all(|(&x, b)| x == b.project(x)));
+        let mut g = vec![0.; n];
+        let cost = fg(&r.x, &mut g).unwrap();
+        assert!((r.f - cost).abs() < 1e-12 * cost.abs().max(1.));
+        // A^T A + 0.1 I is strongly convex with modulus at least 0.1.
+        // An independent normal-cone residual bounds distance to the unique
+        // optimum by ||residual|| / 0.1 and objective error by ||residual||^2 / 0.2.
+        let residual_squared: f64 =
+            r.x.iter()
+                .zip(&g)
+                .zip(&bounds)
+                .map(|((&x, &g), b)| {
+                    if (b.lower == Some(x) && g > 0.) || (b.upper == Some(x) && g < 0.) {
+                        0.
+                    } else {
+                        g * g
+                    }
+                })
+                .sum();
+        let distance_bound = residual_squared.sqrt() / 0.1;
+        let cost_error_bound = residual_squared / 0.2;
         assert!(
-            (r.f - reference.fx()).abs() < 1e-9,
-            "case={case}: {r:?} ref={}",
-            reference.fx()
+            distance_bound < 2e-5,
+            "case={case} distance_bound={distance_bound}: {r:?}"
         );
-        for (&x, &y) in r.x.iter().zip(reference.x()) {
-            assert!(
-                (x - y).abs() < 2e-5,
-                "case={case}: {r:?} ref={:?}",
-                reference.x()
-            );
-        }
+        assert!(
+            cost_error_bound < 1e-9,
+            "case={case} cost_error_bound={cost_error_bound}: {r:?}"
+        );
     }
 }

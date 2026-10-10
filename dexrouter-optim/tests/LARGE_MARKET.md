@@ -2,6 +2,10 @@
 
 ## Current verification
 
+The legacy reference optimizer and its FFI driver have been removed. Current
+diagnostics exercise the Rust solver only; older reference comparisons below
+are retained as historical experiment results.
+
 The current offline snapshot regression passes both the filtered 159-pool/95-token
 route at the library absolute residual tolerance `1e-8`, and the unfiltered
 387-pool/182-token route at the existing application tolerance `1e-6`. Relative
@@ -10,7 +14,7 @@ maximum negative residual value 7.146e-7, within 4003 iterations and 19469 evalu
 Both results are assessed `Approximate`; the raw optimizer status remains visible.
 The full route at the stricter library tolerance still reports numerical stagnation.
 See [the updated precision diagnosis](</home/snylonue/dex-router/dexrouter-optim/tests/CONVERGENCE_DIAGNOSIS.md>)
-and [the snapshot regressions](</home/snylonue/dex-router/dexrouter-arbitrage/src/real_pool_tests.rs>)
+and [the snapshot regressions](</home/snylonue/dex-router/dexrouter-optim/tests/real_pool_tests.rs>)
 for independent residual verification and the floating-point price-grid limitation.
 Both CLI configurations and the serial workspace suite pass.
 
@@ -29,7 +33,7 @@ Capital scaling changes prices by at most 4.101e-16 relatively. Four concurrent
 4096-pool solves match serial results. Timings are machine/load dependent.
 
 ```sh
-cargo test --release -p dexrouter-arbitrage real_pool_residuals -- --ignored --nocapture --test-threads=1
+cargo test --release -p dexrouter-optim --test real_pool_tests real_pool_residuals -- --ignored --nocapture --test-threads=1
 cargo test --release -p dexrouter-optim --test large_market -- --ignored --nocapture --test-threads=1
 ```
 
@@ -52,7 +56,9 @@ DEXROUTER_MIN_ACTIVE_TVL_USD=0 cargo run --release -p dexrouter-arbitrage
 cargo test --workspace -- --test-threads=1
 ~~~
 
-The real-market runs need the local [pool snapshot](<uniswap_v3_pools.json>).
+The real-market runs use the bundled [pool snapshot](</home/snylonue/dex-router/dexrouter-optim/tests/fixtures/uniswap_v3_pools.json>).
+The offline loader and real-pool tests live in `dexrouter-optim`; the CLI shares
+that loader and reads the same fixture by default.
 They read local data only, without fetching RPC data. No snapshot, solver options,
 production objective, or solver algorithm was changed for these measurements.
 

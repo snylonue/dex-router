@@ -9,7 +9,7 @@ cargo build                # Build everything
 cargo build -p dexrouter-optim  # Build single crate
 cargo test                 # Run all tests
 cargo test -p dexrouter-optim -- route_gradient  # Run a single test
-cargo +nightly fmt         # Format (edition 2024 requires nightly rustfmt)
+cargo fmt --all            # Format the workspace
 ```
 
 ## Developmemt
@@ -18,7 +18,7 @@ Use nix to run and install required tools
 
 ## Architecture
 
-This is a DEX arbitrage router that computes optimal multi-pool strategies across Uniswap V2/V3. It formulates arbitrage as **convex optimization over token prices**, solved via **L-BFGS-B** (the `lbfgsb` crate wraps the Fortran library).
+This is a DEX arbitrage router that computes optimal multi-pool strategies across Uniswap V2/V3. It formulates arbitrage as **convex optimization over token prices**, solved via the pure Rust **L-BFGS-B** implementation in `dexrouter-lbfgsb`. The legacy `lbfgsb` dependency and FFI reference driver have been removed; optimizer tests use analytic solutions and independent KKT checks.
 
 ## Theoretical foundation
 
@@ -43,6 +43,7 @@ The **gradient** $\nabla g(\nu) = \bar{U}'(\nu) + \sum_i A_i \Delta_i(\nu)$ uses
 
 ### Crate layout
 
+- **`dexrouter-lbfgsb`** — pure Rust bounded optimizer with no native optimizer, bindgen/libclang, or BLAS requirement
 - **`dexrouter-optim`** — core optimization library, no blockchain dependencies
 - **`dexrouter-arbitrage`** — on-chain data fetching via `alloy` SDK + main binary; depends on `dexrouter-optim`
 
@@ -65,10 +66,10 @@ Given external price ratio `v[0]/v[1]`, returns `(input, output)` token amounts.
 - Cost = `objective.value(p) + Σ (output_value - input_value)` across markets
 - Gradient = utility gradient + `Σ (output - input)` per token
 
-**`solve_price` / `solve_price_with_init_p`** — wraps `lbfgsb` with bounds from the utility to find equilibrium prices. `solve_price` starts from 1.1 uniformly; `solve_price_with_init_p` accepts a custom initial guess.
+**`solve_price` / `solve_price_with_init_p`** — uses `dexrouter-lbfgsb` with bounds from the utility to find equilibrium prices. `solve_price` starts from 1.0 uniformly; `solve_price_with_init_p` accepts a custom initial guess. Checked solver variants expose optimizer diagnostics and independently assess economic residuals. `argmin` remains for the public `Route` cost/gradient traits; the old ndarray math adapter and slog observer dependencies are no longer used.
 
 ### Data fetching (`dexrouter-arbitrage/src/`)
 
 `lib.rs` uses Multicall3 to batch-fetch pool data, decodes the tick bitmap to find initialized ticks, and reconstructs `UniswapV3` market objects from on-chain state.
 
-`main.rs` loads a pre-fetched `uniswap_v3_pools.json`, builds an `IndexSet` of token symbols, constructs a `BasketLiquidation` route (e.g. 10 WETH → USDC), and runs the solver.
+[main.rs](</home/snylonue/dex-router/dexrouter-arbitrage/src/main.rs>) uses the shared offline loader in [snapshot.rs](</home/snylonue/dex-router/dexrouter-optim/src/snapshot.rs>) to build a USDC-anchored `NonnegativeLinear` route and run the checked solver. The default input is the bundled [pool snapshot](</home/snylonue/dex-router/dexrouter-optim/tests/fixtures/uniswap_v3_pools.json>). Real-pool regressions and convergence diagnoses live under `dexrouter-optim/tests/` and can run independently of the blockchain crate. Expensive snapshot tests remain opt-in: `cargo test --release -p dexrouter-optim --test real_pool_tests -- --ignored --nocapture --test-threads=1`.

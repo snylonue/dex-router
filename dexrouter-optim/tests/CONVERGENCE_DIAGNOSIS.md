@@ -2,7 +2,9 @@
 
 ## 当前真实池修复与验收
 
-以下新结果使用本地 539 池快照；后面的原始诊断保留修复前实验，不代表当前运行状态。
+以下新结果使用随测试提供的 539 池快照；后面的原始诊断保留修复前实验，不代表当前运行状态。
+旧参考优化器的依赖和 FFI 驱动已移除；原始双优化器对照结果仅作为历史记录保留。
+现行诊断仍覆盖 Rust 优化器的目标缩放、梯度、预算、价格下界和数值精度。
 应用默认绝对残差价值容差保持 `1e-6`，库默认保持 `1e-8`，相对容差均为 `1e-8`。
 验收对每个 token 检查 `|KKT gradient| * price <= absolute + relative * turnover * price`，
 数学边界允许的导数方向不计入残差；数值价格保护下界不能代替数学下界。
@@ -38,11 +40,11 @@
 不能满足该严格容差。这不是全局不可解的证明：联合价格调整或更高精度仍可能改善。
 不能仅提高迭代预算、忽略这类 token 或改报成功。
 
-复现（真实池测试因需要本地快照而显式忽略）：
+复现（真实池测试和 JSON 均位于 `dexrouter-optim`；这些耗时回归显式忽略，建议用 release 模式运行）：
 
 ```sh
-cargo test --release -p dexrouter-arbitrage real_pool_residuals -- --ignored --nocapture --test-threads=1
-cargo test --release -p dexrouter-arbitrage diagnose_full_market_price_precision -- --ignored --nocapture --test-threads=1
+cargo test --release -p dexrouter-optim --test real_pool_tests real_pool_residuals -- --ignored --nocapture --test-threads=1
+cargo test --release -p dexrouter-optim --test real_pool_tests diagnose_full_market_price_precision -- --ignored --nocapture --test-threads=1
 DEXROUTER_MIN_ACTIVE_TVL_USD=0 cargo run --release -p dexrouter-arbitrage
 cargo test --workspace -- --test-threads=1
 ```
@@ -145,14 +147,14 @@ HashMap 邻接遍历会影响真实初值的路径选择，所以跨独立运行
 
 ## 复现
 
-[合成诊断](<dexrouter-optim/tests/large_market.rs>)和
-[真实诊断](<dexrouter-arbitrage/src/convergence_tests.rs>)均为 opt-in。真实测试需要
-本地 [池快照](<uniswap_v3_pools.json>)，不访问 RPC。
+[合成诊断](</home/snylonue/dex-router/dexrouter-optim/tests/large_market.rs>)和
+[真实诊断](</home/snylonue/dex-router/dexrouter-optim/tests/convergence_tests.rs>)均为 opt-in。真实测试读取
+随测试提供的 [池快照](</home/snylonue/dex-router/dexrouter-optim/tests/fixtures/uniswap_v3_pools.json>)，不访问 RPC。
 
 ~~~sh
 cargo test -p dexrouter-optim --release --test large_market diagnose_synthetic -- --ignored --nocapture --test-threads=1
-cargo test -p dexrouter-arbitrage --release --bin dexrouter-arbitrage diagnose_real_convergence -- --ignored --nocapture --test-threads=1
-cargo test -p dexrouter-arbitrage --release --bin dexrouter-arbitrage diagnose_real_conditioning -- --ignored --nocapture --test-threads=1
+cargo test -p dexrouter-optim --release --test convergence_tests diagnose_real_convergence -- --ignored --nocapture --test-threads=1
+cargo test -p dexrouter-optim --release --test convergence_tests diagnose_real_conditioning -- --ignored --nocapture --test-threads=1
 ~~~
 
 诊断测试通过表示完成实验，不表示所测求解全部收敛；原大池压力测试的严格收敛

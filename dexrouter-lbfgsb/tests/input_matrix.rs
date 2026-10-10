@@ -395,7 +395,7 @@ fn nonfinite_callback_values_and_errors_are_reported() {
 }
 
 #[test]
-fn coupled_spd_quadratics_match_reference() {
+fn coupled_spd_quadratics_match_scalar_stationarity_solution() {
     // Q = diagonal + rank-one SPD update. All four bound kinds, including fixed coordinates.
     for n in [2, 5, 20] {
         for memory in [1, 5, 17] {
@@ -431,28 +431,46 @@ fn coupled_spd_quadratics_match_reference() {
             };
             let ours = minimize(vec![3.; n], bounds.clone(), opts, fg).unwrap();
             assert!(converged(ours.status), "n={n} m={memory}: {ours:?}");
-            let mut problem = lbfgsb::LbfgsbProblem::build(vec![3.; n], fg);
-            problem.set_bounds(bounds.iter().map(|b| (b.lower, b.upper)));
-            let mut reference = lbfgsb::LbfgsbState::new(
-                problem,
-                lbfgsb::LbfgsbParameter {
-                    m: memory,
-                    factr: 0.,
-                    pgtol: 1e-7,
-                    iprint: -1,
-                },
-            );
-            reference.minimize().unwrap();
+            // For diagonal + rank-one Q, stationarity reduces to one scalar:
+            // x_i = project(target_i - shift / weight_i), shift = 0.2 * sum(x - target).
+            let stationarity = |shift: f64| {
+                shift
+                    - 0.2
+                        * (0..n)
+                            .map(|i| {
+                                bounds[i].project(target[i] - shift / (1. + (i % 7) as f64))
+                                    - target[i]
+                            })
+                            .sum::<f64>()
+            };
+            let (mut lo, mut hi) = (-1., 1.);
+            while stationarity(lo) > 0. {
+                lo *= 2.;
+            }
+            while stationarity(hi) < 0. {
+                hi *= 2.;
+            }
+            for _ in 0..80 {
+                let mid = 0.5 * (lo + hi);
+                if stationarity(mid) < 0. {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            let shift = 0.5 * (lo + hi);
+            let optimum: Vec<_> = (0..n)
+                .map(|i| bounds[i].project(target[i] - shift / (1. + (i % 7) as f64)))
+                .collect();
+            let expected_cost = fg(&optimum, &mut vec![0.; n]).unwrap();
             assert!(
-                (ours.f - reference.fx()).abs() < 1e-8,
-                "n={n} m={memory}: {ours:?} reference f={}",
-                reference.fx()
+                (ours.f - expected_cost).abs() < 1e-8,
+                "n={n} m={memory}: {ours:?} expected f={expected_cost}"
             );
-            for (&a, &b) in ours.x.iter().zip(reference.x()) {
+            for (&actual, &expected) in ours.x.iter().zip(&optimum) {
                 assert!(
-                    (a - b).abs() < 2e-5,
-                    "n={n} m={memory}: {ours:?} ref={:?}",
-                    reference.x()
+                    (actual - expected).abs() < 2e-5,
+                    "n={n} m={memory}: {ours:?} optimum={optimum:?}"
                 );
             }
             // Independent KKT residual; don't rely only on the solver's reported norm.

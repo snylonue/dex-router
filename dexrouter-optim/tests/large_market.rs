@@ -224,23 +224,7 @@ fn diagnose_synthetic_convergence() {
             },
         ];
         for config in configs {
-            let rust = run(&route, &initial, config, false);
-            if config.maxls == 20 {
-                let reference = run(&route, &initial, config, true);
-                let price_difference = rust
-                    .price
-                    .iter()
-                    .zip(&reference.price)
-                    .map(|(&a, &b)| (a - b).abs() / a)
-                    .fold(0.0, f64::max);
-                println!(
-                    "comparison label={} relative_cost_difference={:.3e} max_relative_price_difference={price_difference:.3e} rust_pg={:.3e} reference_pg={:.3e}",
-                    config.label,
-                    (rust.cost - reference.cost).abs() / rust.cost.abs().max(1.0),
-                    rust.pg,
-                    reference.pg
-                );
-            }
+            run(&route, &initial, config);
         }
     }
 }

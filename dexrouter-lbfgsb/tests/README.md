@@ -51,17 +51,18 @@ stronger contract than SciPy's possible overshoot at an iteration boundary.
   gradients, budgets 1/2/3/5/10/17 and consistent last accepted state.
 - Invalid shapes/options/bounds; NaN and infinities in objective or gradient,
   including during line search; callback error propagation.
-- Nine coupled SPD quadratics compared with the existing lbfgsb 0.1.1 crate
-  (the classic C translation of Fortran L-BFGS-B), with independent KKT checks.
+- Nine coupled SPD quadratics checked against an independent scalar stationarity
+  equation for the diagonal-plus-rank-one Hessian, with independent KKT checks.
 
 [Nonlinear tests](<dexrouter-lbfgsb/tests/nonlinear.rs>) cover:
 
 - 54 Rosenbrock combinations across f32/f64, dimensions 2/5/10, memory 3/10/17,
-  and three initial points; a constrained Rosenbrock optimum compared with
-  the classic implementation from three starts.
+  and three initial points; a constrained Rosenbrock optimum checked against
+  its analytic solution from three starts.
 - Nine convex exponential problems across starts and objective scales.
 - Condition-number 1e8 quadratics with memories 5 and 17; twelve reproducible
-  seeded dense SPD problems compared with the classic implementation.
+  seeded dense SPD problems certified by independently recomputed normal-cone
+  residuals and strong-convexity bounds on solution and objective error.
 
 Internal tests independently compare limited-memory Hessian products against
 explicit dense BFGS updates, check secant/positive-definiteness/inverse-product
@@ -89,8 +90,8 @@ truncation, for upper/lower bounds and both inverse-recursion and CG paths.
 
 ## Reproduce
 
-The pure Rust solver runs without a global lock. Only calls to the legacy
-`lbfgsb` reference are serialized when multiple tests in one binary use it.
+The solver and regression tests use pure Rust and run without a global lock.
+No external reference optimizer, bindgen/libclang, or BLAS installation is required.
 The two concurrency tests each run 8 workers over 32 problems (f32/f64),
 synchronize inside objective callbacks, and compare solutions, gradients,
 statuses and iteration/evaluation counts exactly against serial baselines.

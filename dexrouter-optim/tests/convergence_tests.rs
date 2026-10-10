@@ -1,8 +1,19 @@
-//! Opt-in offline real-data diagnosis; production routing is unchanged.
-use super::*;
+//! Opt-in offline diagnosis against the bundled Ethereum pool snapshot.
 use argmin::core::Gradient;
-use dexrouter_optim::market::Market;
-#[path = "../../dexrouter-optim/tests/support/convergence.rs"]
+use dexrouter_optim::{
+    Route,
+    market::{Market, UniswapV3},
+    snapshot::{ANCHOR_TOKEN, load_full_market_route},
+    utility::{NonnegativeLinear, UtilityConjugate},
+};
+use ndarray::Array1;
+
+const SNAPSHOT_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/uniswap_v3_pools.json",
+);
+
+#[path = "support/convergence.rs"]
 mod convergence;
 
 fn inspect_conditioning<U: UtilityConjugate>(
@@ -93,10 +104,7 @@ impl UtilityConjugate for FloorUtility {
 #[ignore = "real-data curvature, local market gradient, warm-rescaling and price-floor diagnosis"]
 fn diagnose_real_conditioning() {
     use convergence::{Config, check_gradient, run};
-    let full = load_full_market_route(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../uniswap_v3_pools.json"),
-    )
-    .unwrap();
+    let full = load_full_market_route(SNAPSHOT_PATH).unwrap();
     println!(
         "condition dataset pools={} tokens={}",
         full.route.markets.len(),
@@ -115,11 +123,10 @@ fn diagnose_real_conditioning() {
             iterations: 5000,
             ..Config::default()
         },
-        false,
     );
-    inspect_conditioning(&full.route, &warm.price.mapv(|p| p * 1.001), &full.tokens);
-    check_gradient(&full.route, &warm.price, "real-warm");
-    let ratios = &warm.price / &full.initial_price;
+    inspect_conditioning(&full.route, &warm.mapv(|p| p * 1.001), &full.tokens);
+    check_gradient(&full.route, &warm, "real-warm");
+    let ratios = &warm / &full.initial_price;
     println!(
         "price_change initial_to_warm_min={:.3e} max={:.3e}",
         ratios.iter().copied().fold(f64::INFINITY, f64::min),
@@ -129,8 +136,7 @@ fn diagnose_real_conditioning() {
         label: "warm-rescaled-1000",
         ..Config::default()
     };
-    run(&full.route, &warm.price, config, false);
-    run(&full.route, &warm.price, config, true);
+    run(&full.route, &warm, config);
     for floor in [1e-12, 1e-16] {
         let route = Route {
             objective: FloorUtility {
@@ -143,30 +149,20 @@ fn diagnose_real_conditioning() {
         println!("price_floor={floor:.0e}");
         run(
             &route,
-            &warm.price,
+            &warm,
             Config {
                 label: "reduced-floor-warm-1000",
                 ..Config::default()
             },
-            false,
-        );
-        run(
-            &route,
-            &warm.price,
-            Config {
-                label: "reduced-floor-warm-1000",
-                ..Config::default()
-            },
-            true,
         );
     }
 }
 
 #[test]
-#[ignore = "requires local pool snapshot; matched reference/normalization/budget experiments"]
+#[ignore = "bundled snapshot; Rust optimizer normalization and budget experiments"]
 fn diagnose_real_convergence() {
     use convergence::{Config, check_gradient, run};
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../uniswap_v3_pools.json");
+    let path = SNAPSHOT_PATH;
     let full = load_full_market_route(path).unwrap();
     let route = &full.route;
     let initial = &full.initial_price;
@@ -213,17 +209,9 @@ fn diagnose_real_convergence() {
             ..Config::default()
         },
     ] {
-        let rust = run(route, initial, config, false);
-        let reference = run(route, initial, config, true);
-        println!(
-            "real comparison label={} relative_cost_difference={:.3e} rust_pg={:.3e} reference_pg={:.3e}",
-            config.label,
-            (rust.cost - reference.cost).abs() / rust.cost.abs().max(reference.cost.abs()).max(1.0),
-            rust.pg,
-            reference.pg
-        );
+        let price = run(route, initial, config);
         if config.label == "default" {
-            check_gradient(route, &rust.price, "real-rust-last");
+            check_gradient(route, &price, "real-rust-last");
         }
     }
 }

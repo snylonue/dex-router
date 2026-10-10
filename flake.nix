@@ -31,13 +31,9 @@
             };
             devShells.default = pkgs.mkShell {
               packages = [
-                pkgs.clang
                 pkgs.foundry
                 pkgs.graphviz
               ];
-              buildInputs = [ pkgs.openblas ];
-
-              LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
                 with pkgs;
                 [
