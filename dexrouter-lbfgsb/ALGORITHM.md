@@ -37,6 +37,19 @@ theta = (y_k^T y_k) / (y_k^T s_k)
 
 when memory is available, and `1` otherwise.
 
+The scale is stored when a correction is accepted. Hessian products lazily
+cache each prefix product `B_i s_i` and curvature `s_i^T B_i s_i` once per
+memory state, shared by Cauchy-point and subspace CG calculations. A successful
+push (including eviction) or a reset discards the entire cache: a new scale
+changes even the older prefix products. Rejected corrections preserve it.
+The cache is local to each solver and supports concurrent shared reads.
+
+A rebuild costs `O(m^2 n)`; subsequent Hessian products cost `O(m n)` with
+`O(m n)` additional stored data. Inner products used as denominators are cached,
+but divisions and update order are unchanged to preserve floating-point
+results. This optimization does not replace reduced-space CG with the classic
+`2m`-dimensional compact direct solve.
+
 ## Iteration Outline
 
 Algorithm 778 computes the search direction in two stages.
