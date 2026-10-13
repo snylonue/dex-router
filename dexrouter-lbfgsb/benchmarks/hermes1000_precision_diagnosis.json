@@ -1,0 +1,657 @@
+{
+  "input": "1000 frozen pools, 994 admitted markets, 607 tokens",
+  "same_warm_price_hash_for_both_commits": true,
+  "same_terminal_DD_prices_and_quotes_for_both_commits": true,
+  "strict_relative_tolerance": 1e-9,
+  "absolute_flow_slack": 0,
+  "method": "Decimal precision 100; sum exact recorded binary64 hi+lo quotes and independently test every non-base token, original floors, and scaled gradient",
+  "no_extra_market_quotes": true,
+  "cases": [
+    {
+      "case": "712-audit",
+      "backend": "rust-preprocessed",
+      "dd_recovery": false,
+      "dd_additive": false,
+      "returncode": 1,
+      "process_wall_ms": 2641.3841039757244,
+      "binary_sha256": "a6a15e223a9c015baaee299c849cd6d26f300a84f213251743afc855b227a1ea",
+      "warm_ms": 713.925867,
+      "warm_iterations": 2027,
+      "warm_evaluations": 35368,
+      "warm_status": "ConvergedFunctionReduction",
+      "warm_objective": 3.44163886621118,
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "dd_status": "iteration_limit",
+      "dd_iterations": 32,
+      "independent_bad_tokens": [
+        264
+      ],
+      "independent_max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "independent_scaled_gradient_max": "3.025707948214682604804803924648927868838381914127111703858830652510253286432460651667876044843268282E-20",
+      "independent_floor_violations": 0,
+      "strict_acceptance_passed": false,
+      "production_status": null,
+      "stalled_step_count": 30,
+      "stalled_prices_unchanged": true,
+      "first_bad_step": {
+        "iteration": 2,
+        "token": 264,
+        "alpha": [
+          5.960464477539063e-8,
+          0
+        ],
+        "relative_direction": [
+          7.064234650862087e-31,
+          -1.311391452386706e-47
+        ],
+        "full_step_displacement": [
+          3.015454562146898e-39,
+          -1.6846201728245064e-55
+        ],
+        "accepted_displacement": [
+          1.7973509801309695e-46,
+          -1.0041118698266186e-62
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "bad_price_changed": false,
+        "backtracks": 24
+      },
+      "last_bad_step": {
+        "iteration": 31,
+        "token": 264,
+        "alpha": [
+          7.275957614183426e-12,
+          0
+        ],
+        "relative_direction": [
+          7.064234650862087e-31,
+          -1.3113915278144693e-47
+        ],
+        "full_step_displacement": [
+          3.015454562146898e-39,
+          -1.6846202050217654e-55
+        ],
+        "accepted_displacement": [
+          2.1940319581676873e-50,
+          -1.2257225207735358e-66
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "bad_price_changed": false,
+        "backtracks": 37
+      },
+      "iteration2_numerical_step": {
+        "first_trial_alpha": [
+          1,
+          0
+        ],
+        "first_trial_armijo": false,
+        "first_objective_change": "1.10933564796704785136024329492891813547794654937206360045820474624634E-31",
+        "directional_derivative": "-4.509687127702389938093619440938837607061465734453646701529321906533477948860240218609321816261829403E-41"
+      },
+      "input_hashes_unchanged": true,
+      "audit": "target/hermes-repro/runs/712-audit-dd-audit.json",
+      "receipt": "target/hermes-repro/runs/712-audit-process.json"
+    },
+    {
+      "case": "26-audit",
+      "backend": "rust-previous-preprocessed",
+      "dd_recovery": false,
+      "dd_additive": false,
+      "returncode": 1,
+      "process_wall_ms": 2641.365052026231,
+      "binary_sha256": "a6a15e223a9c015baaee299c849cd6d26f300a84f213251743afc855b227a1ea",
+      "warm_ms": 702.083638,
+      "warm_iterations": 2027,
+      "warm_evaluations": 35368,
+      "warm_status": "ConvergedFunctionReduction",
+      "warm_objective": 3.44163886621118,
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "dd_status": "iteration_limit",
+      "dd_iterations": 32,
+      "independent_bad_tokens": [
+        264
+      ],
+      "independent_max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "independent_scaled_gradient_max": "3.025707948214682604804803924648927868838381914127111703858830652510253286432460651667876044843268282E-20",
+      "independent_floor_violations": 0,
+      "strict_acceptance_passed": false,
+      "production_status": null,
+      "stalled_step_count": 30,
+      "stalled_prices_unchanged": true,
+      "first_bad_step": {
+        "iteration": 2,
+        "token": 264,
+        "alpha": [
+          5.960464477539063e-8,
+          0
+        ],
+        "relative_direction": [
+          7.064234650862087e-31,
+          -1.311391452386706e-47
+        ],
+        "full_step_displacement": [
+          3.015454562146898e-39,
+          -1.6846201728245064e-55
+        ],
+        "accepted_displacement": [
+          1.7973509801309695e-46,
+          -1.0041118698266186e-62
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "bad_price_changed": false,
+        "backtracks": 24
+      },
+      "last_bad_step": {
+        "iteration": 31,
+        "token": 264,
+        "alpha": [
+          7.275957614183426e-12,
+          0
+        ],
+        "relative_direction": [
+          7.064234650862087e-31,
+          -1.3113915278144693e-47
+        ],
+        "full_step_displacement": [
+          3.015454562146898e-39,
+          -1.6846202050217654e-55
+        ],
+        "accepted_displacement": [
+          2.1940319581676873e-50,
+          -1.2257225207735358e-66
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "bad_price_changed": false,
+        "backtracks": 37
+      },
+      "iteration2_numerical_step": {
+        "first_trial_alpha": [
+          1,
+          0
+        ],
+        "first_trial_armijo": false,
+        "first_objective_change": "1.10933564796704785136024329492891813547794654937206360045820474624634E-31",
+        "directional_derivative": "-4.509687127702389938093619440938837607061465734453646701529321906533477948860240218609321816261829403E-41"
+      },
+      "input_hashes_unchanged": true,
+      "audit": "target/hermes-repro/runs/26-audit-dd-audit.json",
+      "receipt": "target/hermes-repro/runs/26-audit-process.json"
+    },
+    {
+      "case": "c-raw-audit",
+      "backend": "c-raw",
+      "dd_recovery": false,
+      "dd_additive": false,
+      "returncode": 0,
+      "process_wall_ms": 2542.2985440236516,
+      "binary_sha256": "a6a15e223a9c015baaee299c849cd6d26f300a84f213251743afc855b227a1ea",
+      "warm_ms": 286.886321,
+      "warm_iterations": 1074,
+      "warm_evaluations": 3012,
+      "warm_status": "LineSearchFailed",
+      "warm_objective": 3.6159961104074276,
+      "warm_price_hash": "2b459245cb60963b",
+      "dd_status": "strict_and_gradient_satisfied",
+      "dd_iterations": 15,
+      "independent_bad_tokens": [],
+      "independent_max_relative_flow_residual": "1.480333011670761825911537135150061083561075346169073057855455653092935518011604177552085467177587413E-11",
+      "independent_scaled_gradient_max": "2.819626997026199723583052995610092952956407121458008578861799456174865895976703621214363052129510251E-20",
+      "independent_floor_violations": 0,
+      "strict_acceptance_passed": true,
+      "production_status": "no_admissible_candidate",
+      "stalled_step_count": 0,
+      "stalled_prices_unchanged": true,
+      "first_bad_step": null,
+      "last_bad_step": null,
+      "iteration2_numerical_step": {
+        "first_trial_alpha": [
+          1,
+          0
+        ],
+        "first_trial_armijo": false,
+        "first_objective_change": "0.009378640527825944327381881434071080575376394295502578424673331995362057789122900430811569094657898",
+        "directional_derivative": "-0.000004421689639636994199477552968778517687772995178875432788358727122992333996923108863086326891789212823"
+      },
+      "input_hashes_unchanged": true,
+      "audit": "target/hermes-repro/runs/c-raw-audit-dd-audit.json",
+      "receipt": "target/hermes-repro/runs/c-raw-audit-process.json"
+    },
+    {
+      "case": "c-preprocessed-audit",
+      "backend": "c-preprocessed",
+      "dd_recovery": false,
+      "dd_additive": false,
+      "returncode": 1,
+      "process_wall_ms": 3493.654212972615,
+      "binary_sha256": "a6a15e223a9c015baaee299c849cd6d26f300a84f213251743afc855b227a1ea",
+      "warm_ms": 2697.132955,
+      "warm_iterations": 2263,
+      "warm_evaluations": 357278,
+      "warm_status": "LineSearchFailed",
+      "warm_objective": 3.441638866212973,
+      "warm_price_hash": "f23d4ae2d3785fe0",
+      "dd_status": "line_search_failed",
+      "dd_iterations": 0,
+      "independent_bad_tokens": [
+        34,
+        42,
+        43,
+        45,
+        68,
+        104,
+        106,
+        111,
+        112,
+        122,
+        123,
+        151,
+        173,
+        180,
+        187,
+        188,
+        207,
+        211,
+        229,
+        233,
+        237,
+        249,
+        264,
+        276,
+        283,
+        293,
+        326,
+        332,
+        366,
+        372,
+        392,
+        402,
+        415,
+        471,
+        517,
+        519,
+        521,
+        536,
+        562,
+        564,
+        587,
+        598
+      ],
+      "independent_max_relative_flow_residual": "1",
+      "independent_scaled_gradient_max": "1.763689107575554230328889353896654724147225634821411690604985453645021530932591771537168381965940412E-10",
+      "independent_floor_violations": 0,
+      "strict_acceptance_passed": false,
+      "production_status": null,
+      "stalled_step_count": 0,
+      "stalled_prices_unchanged": true,
+      "first_bad_step": null,
+      "last_bad_step": null,
+      "iteration2_numerical_step": null,
+      "input_hashes_unchanged": true,
+      "audit": "target/hermes-repro/runs/c-preprocessed-audit-dd-audit.json",
+      "receipt": "target/hermes-repro/runs/c-preprocessed-audit-process.json"
+    },
+    {
+      "case": "712-supplied-recovery-audit",
+      "backend": "rust-preprocessed",
+      "dd_recovery": true,
+      "dd_additive": false,
+      "returncode": 0,
+      "process_wall_ms": 2842.7511210320517,
+      "binary_sha256": "a6a15e223a9c015baaee299c849cd6d26f300a84f213251743afc855b227a1ea",
+      "warm_ms": 714.923524,
+      "warm_iterations": 2027,
+      "warm_evaluations": 35368,
+      "warm_status": "ConvergedFunctionReduction",
+      "warm_objective": 3.44163886621118,
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "dd_status": "strict_and_gradient_satisfied",
+      "dd_iterations": 4,
+      "independent_bad_tokens": [],
+      "independent_max_relative_flow_residual": "1.480333011670781389271933190077710837269428554366438202713284518800503791634993444410177462178071333E-11",
+      "independent_scaled_gradient_max": "3.026077442358859889596915308740677874675688690442575937001182505939160651377636955165941669471015321E-20",
+      "independent_floor_violations": 0,
+      "strict_acceptance_passed": true,
+      "production_status": "no_admissible_candidate",
+      "stalled_step_count": 1,
+      "stalled_prices_unchanged": true,
+      "first_bad_step": {
+        "iteration": 2,
+        "token": 264,
+        "alpha": [
+          5.960464477539063e-8,
+          0
+        ],
+        "relative_direction": [
+          7.064234650862087e-31,
+          -1.311391452386706e-47
+        ],
+        "full_step_displacement": [
+          3.015454562146898e-39,
+          -1.6846201728245064e-55
+        ],
+        "accepted_displacement": [
+          1.7973509801309695e-46,
+          -1.0041118698266186e-62
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "bad_price_changed": false,
+        "backtracks": 24
+      },
+      "last_bad_step": {
+        "iteration": 2,
+        "token": 264,
+        "alpha": [
+          5.960464477539063e-8,
+          0
+        ],
+        "relative_direction": [
+          7.064234650862087e-31,
+          -1.311391452386706e-47
+        ],
+        "full_step_displacement": [
+          3.015454562146898e-39,
+          -1.6846201728245064e-55
+        ],
+        "accepted_displacement": [
+          1.7973509801309695e-46,
+          -1.0041118698266186e-62
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.4805871723191558e-25
+        ],
+        "bad_price_changed": false,
+        "backtracks": 24
+      },
+      "iteration2_numerical_step": {
+        "first_trial_alpha": [
+          1,
+          0
+        ],
+        "first_trial_armijo": false,
+        "first_objective_change": "1.10933564796704785136024329492891813547794654937206360045820474624634E-31",
+        "directional_derivative": "-4.509687127702389938093619440938837607061465734453646701529321906533477948860240218609321816261829403E-41"
+      },
+      "input_hashes_unchanged": true,
+      "audit": "target/hermes-repro/runs/712-supplied-recovery-audit-dd-audit.json",
+      "receipt": "target/hermes-repro/runs/712-supplied-recovery-audit-process.json"
+    },
+    {
+      "case": "712-additive-audit",
+      "backend": "rust-preprocessed",
+      "dd_recovery": false,
+      "dd_additive": true,
+      "returncode": 1,
+      "process_wall_ms": 2741.2759679718874,
+      "binary_sha256": "a6a15e223a9c015baaee299c849cd6d26f300a84f213251743afc855b227a1ea",
+      "warm_ms": 716.219724,
+      "warm_iterations": 2027,
+      "warm_evaluations": 35368,
+      "warm_status": "ConvergedFunctionReduction",
+      "warm_objective": 3.44163886621118,
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "dd_status": "iteration_limit",
+      "dd_iterations": 32,
+      "independent_bad_tokens": [
+        264
+      ],
+      "independent_max_relative_flow_residual": "5.786170201931639010516444140067660390310954315459030954841876772176421881445803227265207819106250262E-9",
+      "independent_scaled_gradient_max": "3.025707948214682604804803924648927868838381914127111703858830652510253286432460651667876044843268282E-20",
+      "independent_floor_violations": 0,
+      "strict_acceptance_passed": false,
+      "production_status": null,
+      "stalled_step_count": 30,
+      "stalled_prices_unchanged": true,
+      "first_bad_step": {
+        "iteration": 2,
+        "token": 264,
+        "alpha": [
+          5.960464477539063e-8,
+          0
+        ],
+        "relative_direction": [
+          7.146164324277258e-31,
+          -7.85664541434599e-48
+        ],
+        "full_step_displacement": [
+          3.0504272406726365e-39,
+          4.912155443207894e-56
+        ],
+        "accepted_displacement": [
+          1.818196320934675e-46,
+          2.92787280273908e-63
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.480587172319156e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.480587172319156e-25
+        ],
+        "bad_price_changed": false,
+        "backtracks": 24
+      },
+      "last_bad_step": {
+        "iteration": 31,
+        "token": 264,
+        "alpha": [
+          7.275957614183426e-12,
+          0
+        ],
+        "relative_direction": [
+          7.146164324277258e-31,
+          -7.85664650776191e-48
+        ],
+        "full_step_displacement": [
+          3.0504272406726365e-39,
+          4.912154976469997e-56
+        ],
+        "accepted_displacement": [
+          2.2194779308284607e-50,
+          3.574063140309588e-67
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.480587172319156e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.480587172319156e-25
+        ],
+        "bad_price_changed": false,
+        "backtracks": 37
+      },
+      "iteration2_numerical_step": {
+        "first_trial_alpha": [
+          1,
+          0
+        ],
+        "first_trial_armijo": false,
+        "first_objective_change": "1.10933564796704785136024329492891813547794654937206360045820474624634E-31",
+        "directional_derivative": "-4.509687127579095930183321931132985902644366826061272645895184099667729915196571354389546476132619292E-41"
+      },
+      "input_hashes_unchanged": true,
+      "audit": "target/hermes-repro/runs/712-additive-audit-dd-audit.json",
+      "receipt": "target/hermes-repro/runs/712-additive-audit-process.json"
+    },
+    {
+      "case": "712-raw-audit",
+      "backend": "rust-raw",
+      "dd_recovery": false,
+      "dd_additive": false,
+      "returncode": 0,
+      "process_wall_ms": 8357.367263990454,
+      "binary_sha256": "a6a15e223a9c015baaee299c849cd6d26f300a84f213251743afc855b227a1ea",
+      "warm_ms": 5800.721176,
+      "warm_iterations": 12761,
+      "warm_evaluations": 27161,
+      "warm_status": "LineSearchFailed",
+      "warm_objective": 3.469847370091608,
+      "warm_price_hash": "2af8d49639e679ce",
+      "dd_status": "strict_and_gradient_satisfied",
+      "dd_iterations": 18,
+      "independent_bad_tokens": [],
+      "independent_max_relative_flow_residual": "1.480333011670787191793514285608219614535055262058313502684296301309141854330073681075654981757562892E-11",
+      "independent_scaled_gradient_max": "1.712061189002699591746867837615577851663536315793371616944553352330173260590598938644731907707469479E-25",
+      "independent_floor_violations": 0,
+      "strict_acceptance_passed": true,
+      "production_status": "no_admissible_candidate",
+      "stalled_step_count": 1,
+      "stalled_prices_unchanged": false,
+      "first_bad_step": {
+        "iteration": 17,
+        "token": 264,
+        "alpha": [
+          1,
+          0
+        ],
+        "relative_direction": [
+          1.5727543948448158e-18,
+          2.0862063617610402e-35
+        ],
+        "full_step_displacement": [
+          6.713493604707231e-27,
+          -6.289816149848655e-43
+        ],
+        "accepted_displacement": [
+          6.713493604707231e-27,
+          -6.289816149848655e-43
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.5477221083661978e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.4805871723191255e-25
+        ],
+        "bad_price_changed": true,
+        "backtracks": 0
+      },
+      "last_bad_step": {
+        "iteration": 17,
+        "token": 264,
+        "alpha": [
+          1,
+          0
+        ],
+        "relative_direction": [
+          1.5727543948448158e-18,
+          2.0862063617610402e-35
+        ],
+        "full_step_displacement": [
+          6.713493604707231e-27,
+          -6.289816149848655e-43
+        ],
+        "accepted_displacement": [
+          6.713493604707231e-27,
+          -6.289816149848655e-43
+        ],
+        "before_price": [
+          4.268621742029628e-9,
+          -1.5477221083661978e-25
+        ],
+        "after_price": [
+          4.268621742029628e-9,
+          -1.4805871723191255e-25
+        ],
+        "bad_price_changed": true,
+        "backtracks": 0
+      },
+      "iteration2_numerical_step": {
+        "first_trial_alpha": [
+          5e-19,
+          0
+        ],
+        "first_trial_armijo": false,
+        "first_objective_change": "4.116060772446076126451677157039661926465539542368807983102388099554136413615879064309410750865936280",
+        "directional_derivative": "-24209238960.11770522062207322533189670049451336364398912337492220103740692138671875"
+      },
+      "input_hashes_unchanged": true,
+      "audit": "target/hermes-repro/runs/712-raw-audit-dd-audit.json",
+      "receipt": "target/hermes-repro/runs/712-raw-audit-process.json"
+    }
+  ],
+  "old_raw_core_timeout": {
+    "argv": [
+      "/home/snylonue/dex-router/target/release/hermes_minimize_snapshot",
+      "/home/snylonue/dex-router/target/hermes-repro/hermes-minimize-integration-20261013/input/pools-1000/snapshot.json",
+      "/home/snylonue/dex-router/target/hermes-repro/hermes-minimize-integration-20261013/input/pools-1000/registry.db",
+      "1000000000000000000",
+      "/home/snylonue/dex-router/target/hermes-repro/hermes-minimize-integration-20261013/input/pools-1000/budget.json",
+      "/home/snylonue/dex-router/target/hermes-repro/runs/rust-previous-raw-dd32",
+      "--fees",
+      "/home/snylonue/dex-router/target/hermes-repro/hermes-minimize-integration-20261013/input/pools-1000/fees.json",
+      "--virtual-config",
+      "/home/snylonue/dex-router/target/hermes-repro/hermes-minimize-integration-20261013/input/pools-1000/config.json",
+      "--solve-timing",
+      "/home/snylonue/dex-router/target/hermes-repro/runs/rust-previous-raw-dd32-timing.json"
+    ],
+    "invocations": 1,
+    "returncode": null,
+    "timed_out": true,
+    "process_wall_ms": 30023.533364990726,
+    "binary_sha256": "f439563aeca9a36074955030914d41d753ff28b40b8175f619f55e7149a5e6f7",
+    "input_hashes_unchanged": true,
+    "environment_cleared": true,
+    "backend": "rust-previous-raw",
+    "dd_recovery": false,
+    "dd_additive": false,
+    "output": "/home/snylonue/dex-router/target/hermes-repro/runs/rust-previous-raw-dd32",
+    "entry": "offline loss_aware only",
+    "rpc_requests": 0,
+    "evm_simulations": 0
+  },
+  "provenance": {
+    "latest_core_commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+    "previous_core_commit": "26e7d6c77f3e817b85172ffeb4e7c55d7c957329",
+    "previous_core_source_identical_to_master_71a731c": true,
+    "native_reference": "uploaded vendor/lbfgsb, native integer-task setulb, matching parameters; not the mismatched legacy helper",
+    "stalled_recovery": "already present in supplied archive; not a new optimizer fix",
+    "focused_tests": {
+      "passed": 3,
+      "failed": 0
+    },
+    "measurements": "single-run warm-stage measurements, not latency guarantees"
+  }
+}

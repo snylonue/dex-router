@@ -336,6 +336,26 @@ fn search_direction<T: Float>(
     bounds: &[Bound<T>],
     memory: &LbfgsMemory<T>,
 ) -> Vec<T> {
+    if !memory.is_empty() && memory.theta().is_finite() && memory.theta() > T::zero() {
+        // A feasible unconstrained minimizer also minimizes the box-constrained
+        // positive-definite BFGS model. Use its two-loop inverse directly, before
+        // building a Cauchy point or the forward Hessian representation.
+        // Check the rounded displacement as well; actual-objective Wolfe tests
+        // still decide whether the solver accepts this search direction.
+        let target = sub(x, &memory.inverse_hessian_product(gradient));
+        if all_finite(&target)
+            && target
+                .iter()
+                .zip(bounds)
+                .all(|(&value, bound)| bound.project(value) == value)
+        {
+            let direction = sub(&target, x);
+            let slope = dot(gradient, &direction);
+            if all_finite(&direction) && slope.is_finite() && slope < T::zero() {
+                return direction;
+            }
+        }
+    }
     let cauchy = generalized_cauchy_point(x, gradient, bounds, memory);
     let target = if memory.is_empty() {
         cauchy
@@ -369,6 +389,60 @@ fn accept_step<T: Float>(
     *x = next.x;
     *f = next.f;
     *gradient = next.g;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model() -> LbfgsMemory<f64> {
+        let mut memory = LbfgsMemory::new(3);
+        // theta=5; one BFGS update gives B=[[1,2],[2,9]].
+        assert!(memory.push(vec![1., 0.], vec![1., 2.]));
+        memory
+    }
+
+    #[test]
+    fn feasible_full_newton_direction_avoids_forward_hessian_reconstruction() {
+        let memory = model();
+        let direction = search_direction(&[0., 0.], &[1., 2.], &[Bound::both(-2., 2.); 2], &memory);
+        assert_eq!(direction, [-1., 0.]);
+        assert!(!memory.hessian_cache_is_initialized());
+        // The independent dense model has its global minimum here.
+        assert_eq!(
+            1. * direction[0]
+                + 2. * direction[1]
+                + 0.5
+                    * (direction[0].powi(2)
+                        + 4. * direction[0] * direction[1]
+                        + 9. * direction[1].powi(2)),
+            -0.5
+        );
+    }
+
+    #[test]
+    fn invalid_model_scale_does_not_take_feasible_newton_shortcut() {
+        let mut memory = LbfgsMemory::new(1);
+        assert!(memory.push(vec![1e-300_f64], vec![1e50]));
+        assert!(!memory.theta().is_finite());
+        search_direction(&[1e-300], &[1e50], &[Bound::both(-1., 1.)], &memory);
+        assert!(memory.hessian_cache_is_initialized());
+    }
+
+    #[test]
+    fn infeasible_full_newton_direction_keeps_cauchy_and_model_safeguards() {
+        let memory = model();
+        let bounds = [Bound::both(-0.25, 2.), Bound::both(-2., 2.)];
+        let direction = search_direction(&[0., 0.], &[1., 2.], &bounds, &memory);
+        assert!(memory.hessian_cache_is_initialized());
+        assert!(
+            direction
+                .iter()
+                .zip(bounds)
+                .all(|(&x, bound)| bound.project(x) == x)
+        );
+        assert!(dot(&[1., 2.], &direction) < 0.);
+    }
 }
 
 fn function_reduction_converged<T: Float>(old_f: T, new_f: T, factr: T) -> bool {

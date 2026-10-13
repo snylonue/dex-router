@@ -48,6 +48,11 @@ impl<T: Float> LbfgsMemory<T> {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn hessian_cache_is_initialized(&self) -> bool {
+        self.hessian_cache.get().is_some()
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         self.pairs.is_empty()
     }

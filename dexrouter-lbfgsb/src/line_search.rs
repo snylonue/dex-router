@@ -103,7 +103,9 @@ where
             return Ok(outcome);
         }
         if let Some(b) = &mut bracket {
-            if !armijo || eval.f >= b.low_phi {
+            // A rounded tie does not establish which side contains the minimum.
+            // Retain the derivative bracket instead of discarding its root.
+            if !armijo || eval.f > b.low_phi {
                 b.high_step = step;
                 b.high_phi = eval.f;
                 b.high_derivative = derphi;
@@ -118,7 +120,7 @@ where
                 b.low_derivative = derphi;
             }
         } else {
-            if !armijo || (iteration > 0 && eval.f >= previous_phi) {
+            if !armijo || (iteration > 0 && eval.f > previous_phi) {
                 bracket = Some(ZoomBracket {
                     low_step: previous_step,
                     low_phi: previous_phi,
@@ -173,6 +175,28 @@ impl<T: Float + FromPrimitive> ZoomBracket<T> {
         let opposite_slopes = (self.low_derivative < T::zero()
             && self.high_derivative >= T::zero())
             || (self.low_derivative > T::zero() && self.high_derivative <= T::zero());
+        // On an objective plateau, the function-value quadratic has no useful
+        // curvature information. Interpolate the opposite derivatives, anchored
+        // at the endpoint with the smaller slope to avoid rounding 1-t to 1.
+        // The next evaluation still has to satisfy the original Wolfe tests.
+        if self.high_phi == self.low_phi && opposite_slopes {
+            let scale = self.low_derivative.abs().max(self.high_derivative.abs());
+            if scale.is_finite() && scale > T::zero() {
+                let low = self.low_derivative.abs() / scale;
+                let high = self.high_derivative.abs() / scale;
+                let trial = if low <= high {
+                    self.low_step + (low / (low + high)) * width
+                } else {
+                    self.high_step - (high / (low + high)) * width
+                };
+                if trial.is_finite()
+                    && trial > self.low_step.min(self.high_step)
+                    && trial < self.low_step.max(self.high_step)
+                {
+                    return trial;
+                }
+            }
+        }
         // Use the quadratic through both function values and the low-end slope.
         // If it is unusable, interpolate the derivative when it brackets a root.
         let secant = -self.low_derivative / (self.high_derivative - self.low_derivative);
@@ -230,7 +254,51 @@ where
 }
 #[cfg(test)]
 mod tests {
-    use super::ZoomBracket;
+    use super::{ZoomBracket, strong_wolfe};
+    use crate::{Bound, Options};
+
+    #[test]
+    fn plateau_secant_preserves_tiny_steps_and_endpoint_order() {
+        for (low, high) in [(0_f64, 1.), (1., 0.)] {
+            let root = 1e-24;
+            let bracket = ZoomBracket {
+                low_step: low,
+                high_step: high,
+                low_phi: 1e100,
+                high_phi: 1e100,
+                low_derivative: 1e24 * (low - root),
+                high_derivative: 1e24 * (high - root),
+            };
+            assert!((bracket.trial_step() - root).abs() <= 1e-38);
+        }
+    }
+
+    #[test]
+    fn rounded_plateau_with_negative_slopes_keeps_expanding() {
+        let mut fg = |x: &[f64], g: &mut [f64]| {
+            g[0] = 0.01 * (x[0] - 100.);
+            Ok(1e20 + 0.005 * (x[0] - 100.).powi(2))
+        };
+        let options = Options::default();
+        let outcome = strong_wolfe(
+            &[0.],
+            1e20,
+            &[-1.],
+            &[1.],
+            &[Bound::both(-1000., 1000.)],
+            &options,
+            20,
+            1.,
+            &mut fg,
+        )
+        .unwrap();
+        let step = outcome
+            .step
+            .expect("equal rounded values must not stop expansion");
+        assert!(step.x[0] >= 10.);
+        assert!(step.g[0].abs() <= options.wolfe_c2);
+        assert!(step.f <= 1e20 + options.wolfe_c1 * step.x[0] * -1.);
+    }
 
     #[test]
     fn zoom_interpolates_quadratic_with_either_endpoint_order() {

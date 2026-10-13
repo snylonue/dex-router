@@ -1,0 +1,112 @@
+{
+  "scope": "Our pure Rust kernel only; no production Hermes DD repair and no tolerance relaxation.",
+  "source_commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+  "source_state_at_measurement": "uncommitted fixes over source_commit",
+  "scalar_counterexample": {
+    "x0": 0.000001,
+    "bounds": [
+      -1,
+      1
+    ],
+    "quadratic_curvature": 10000,
+    "offset": 100000000000000000000,
+    "factr": 0,
+    "pgtol": 1e-9,
+    "before": {
+      "status": "LineSearchFailed",
+      "evaluations": 21,
+      "gradient": 0.01
+    },
+    "native_c": {
+      "status": "ConvergedProjectedGradient",
+      "evaluations": 3,
+      "gradient_abs": 1.0001341524705151e-14
+    },
+    "after": {
+      "status": "ConvergedProjectedGradient",
+      "evaluations": 3,
+      "gradient": 0
+    },
+    "f32": {
+      "offset": 100000000,
+      "pgtol": 0.00001,
+      "before_evaluations": 21,
+      "after_evaluations": 3,
+      "after_gradient": 0
+    }
+  },
+  "profile_before": {
+    "warm_ms": 5803.810765,
+    "hessian_cache_rebuilds": 12762,
+    "hessian_cache_rebuild_ms": 2921.468717,
+    "hessian_product_ms_inclusive": 3962.78884,
+    "search_direction_ms_inclusive": 4670.770567,
+    "callback_ms": 920.02456,
+    "all_free_subspace": 12761,
+    "restricted_subspace": 0,
+    "failed_search_restarts": 25
+  },
+  "profile_after": {
+    "warm_ms": 1503.50225,
+    "feasible_newton_shortcuts": 12740,
+    "hessian_cache_rebuilds": 22,
+    "hessian_cache_rebuild_ms": 4.02955
+  },
+  "remaining_c_comparison": {
+    "native_c_raw_warm_ms": 286.886321,
+    "rust_raw_iterations": 12761,
+    "c_raw_iterations": 1074,
+    "rust_raw_evaluations": 27161,
+    "c_raw_evaluations": 3012,
+    "both_raw_optimizer_statuses": "LineSearchFailed",
+    "warning": "Single measured warm wall times; not end-to-end, convergence-speed, or production-admission certification."
+  },
+  "timing_cases": {
+    "raw_before": "target/hermes-repro/runs/rust-raw-kernel-audit-process.json",
+    "raw_after": "target/hermes-repro/runs/rust-raw-feasible-newton-audit-process.json",
+    "preprocessed_before": "target/hermes-repro/runs/rust-preprocessed-plateau-basic-process.json",
+    "preprocessed_after": "target/hermes-repro/runs/rust-preprocessed-feasible-newton-audit-process.json"
+  },
+  "strict_original_precision": {
+    "raw_pass": true,
+    "raw_dd_iterations": 18,
+    "raw_max_relative_flow_residual": 1.480333011670787e-11,
+    "raw_production_status": "no_admissible_candidate",
+    "preprocessed_pass": false,
+    "preprocessed_dd_iterations": 32,
+    "preprocessed_bad_tokens": [
+      264
+    ],
+    "preprocessed_max_relative_flow_residual": 5.71983265205935e-9,
+    "entire_final_dd_audit_bitwise_equal_before_after": {
+      "raw": true,
+      "preprocessed": true
+    },
+    "independent_decimal_100_results": "target/hermes-repro/kernel-variant-results.json"
+  },
+  "rejected_ablation": {
+    "change": "Recompute Cauchy after failed-search memory reset instead of projected steepest ray.",
+    "deadline_seconds": 30,
+    "exit_code": 124,
+    "precision": "unknown",
+    "production_change_included": false,
+    "receipt": "target/hermes-repro/runs/rust-raw-cauchy-restart-audit-process.json"
+  },
+  "tests": {
+    "release_offline_default": {
+      "passed": 132,
+      "failed": 0,
+      "ignored": 11
+    },
+    "additional_real_pool_residuals": {
+      "passed": 1,
+      "failed": 0,
+      "pool_counts": [
+        159,
+        387
+      ],
+      "warning": "Original configured application allowances, not Hermes strict relative-only acceptance."
+    }
+  },
+  "profiling_only_under": "target/hermes-repro/hermes-minimize-integration-20261013/vendor/dexrouter-lbfgsb/src/audit.rs"
+}
