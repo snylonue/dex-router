@@ -6,7 +6,7 @@ use crate::{
     cast,
     cauchy::generalized_cauchy_point,
     dot,
-    line_search::{LineSearchFailure, strong_wolfe},
+    line_search::{LineSearchFailure, LineSearchResult, strong_wolfe},
     memory::LbfgsMemory,
     norm_inf, sub,
     subspace::subspace_minimize,
@@ -87,6 +87,9 @@ pub struct OptimizeResult<T> {
     pub line_search_failure: Option<LineSearchFailure>,
 }
 
+/// Minimize a box-constrained objective. Fixed coordinates are excluded from
+/// search directions and BFGS history, but callbacks/results retain the full
+/// original dimension and gradient. No extra callback is needed for expansion.
 pub fn minimize<T, F>(
     mut x: Vec<T>,
     bounds: Vec<Bound<T>>,
@@ -99,6 +102,12 @@ where
 {
     validate_problem(&x, &bounds, &options)?;
     project(&mut x, &bounds);
+    let variables: Vec<_> = bounds
+        .iter()
+        .enumerate()
+        .filter_map(|(i, bound)| (!bound.is_fixed()).then_some(i))
+        .collect();
+    let variable_bounds: Vec<_> = variables.iter().map(|&i| bounds[i]).collect();
 
     let mut gradient = vec![T::zero(); x.len()];
     let mut f = fg(&x, &mut gradient)?;
@@ -136,7 +145,8 @@ where
             });
         }
 
-        let direction = search_direction(&x, &gradient, &bounds, &memory);
+        let direction =
+            reduced_search_direction(&x, &gradient, &variables, &variable_bounds, &memory);
         let mut direction = if descent_derivative(&gradient, &direction) < T::zero() {
             direction
         } else {
@@ -239,9 +249,8 @@ where
             &mut f,
             &mut gradient,
             &mut memory,
-            line_search.x,
-            line_search.f,
-            line_search.g,
+            &variables,
+            line_search,
         );
         projected_gradient_inf_norm = norm_inf(&projected_gradient(&x, &gradient, &bounds));
 
@@ -301,6 +310,26 @@ fn validate_problem<T: Float>(
     options.validate()
 }
 
+fn reduced_search_direction<T: Float>(
+    x: &[T],
+    gradient: &[T],
+    variables: &[usize],
+    bounds: &[Bound<T>],
+    memory: &LbfgsMemory<T>,
+) -> Vec<T> {
+    if variables.len() == x.len() {
+        return search_direction(x, gradient, bounds, memory);
+    }
+    let reduced_x: Vec<_> = variables.iter().map(|&i| x[i]).collect();
+    let reduced_g: Vec<_> = variables.iter().map(|&i| gradient[i]).collect();
+    let reduced = search_direction(&reduced_x, &reduced_g, bounds, memory);
+    let mut direction = vec![T::zero(); x.len()];
+    for (&i, &value) in variables.iter().zip(&reduced) {
+        direction[i] = value;
+    }
+    direction
+}
+
 fn search_direction<T: Float>(
     x: &[T],
     gradient: &[T],
@@ -330,16 +359,16 @@ fn accept_step<T: Float>(
     f: &mut T,
     gradient: &mut Vec<T>,
     memory: &mut LbfgsMemory<T>,
-    next_x: Vec<T>,
-    next_f: T,
-    next_gradient: Vec<T>,
+    variables: &[usize],
+    next: LineSearchResult<T>,
 ) {
-    let s = sub(&next_x, x);
-    let y = sub(&next_gradient, gradient);
+    // In particular, fixed-coordinate gradient changes must not affect theta.
+    let s = variables.iter().map(|&i| next.x[i] - x[i]).collect();
+    let y = variables.iter().map(|&i| next.g[i] - gradient[i]).collect();
     memory.push(s, y);
-    *x = next_x;
-    *f = next_f;
-    *gradient = next_gradient;
+    *x = next.x;
+    *f = next.f;
+    *gradient = next.g;
 }
 
 fn function_reduction_converged<T: Float>(old_f: T, new_f: T, factr: T) -> bool {

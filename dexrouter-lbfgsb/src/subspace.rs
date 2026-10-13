@@ -44,19 +44,37 @@ pub(crate) fn subspace_minimize<T: Float>(
         return feasible_model_step(cauchy, target, &model_gradient, bounds, memory);
     }
 
-    let mut step = vec![T::zero(); x.len()];
-    let mut residual = vec![T::zero(); x.len()];
+    let mut rhs = vec![T::zero(); x.len()];
     for &idx in &free {
-        residual[idx] = -model_gradient[idx];
+        rhs[idx] = -model_gradient[idx];
     }
+    // No size/CG-iteration threshold: use the at-most-2m direct system whenever
+    // there is a genuinely restricted subspace. CG is only a numerical fallback.
+    let step = memory
+        .solve_reduced(&rhs, &free)
+        .unwrap_or_else(|| cg_solve(&rhs, &free, &free_mask, memory));
+
+    let mut target = cauchy.to_vec();
+    for &idx in &free {
+        target[idx] = cauchy[idx] + step[idx];
+    }
+    feasible_model_step(cauchy, target, &model_gradient, bounds, memory)
+}
+
+fn cg_solve<T: Float>(
+    rhs: &[T],
+    free: &[usize],
+    free_mask: &[bool],
+    memory: &LbfgsMemory<T>,
+) -> Vec<T> {
+    let mut step = vec![T::zero(); rhs.len()];
+    let mut residual = rhs.to_vec();
     let mut direction = residual.clone();
     let mut residual_norm = norm2_squared(&residual);
-    let initial_residual_norm = residual_norm;
     if residual_norm == T::zero() {
-        return cauchy.to_vec();
+        return step;
     }
-
-    let tolerance = T::epsilon().sqrt() * initial_residual_norm.sqrt();
+    let tolerance = T::epsilon().sqrt() * residual_norm.sqrt();
     for _ in 0..free.len().max(1) {
         let mut bd = memory.hessian_product(&direction);
         for (idx, value) in bd.iter_mut().enumerate() {
@@ -65,11 +83,11 @@ pub(crate) fn subspace_minimize<T: Float>(
             }
         }
         let curvature = dot(&direction, &bd);
-        if curvature <= T::zero() {
+        if !curvature.is_finite() || curvature <= T::zero() {
             break;
         }
         let alpha = residual_norm / curvature;
-        for &idx in &free {
+        for &idx in free {
             step[idx] = step[idx] + alpha * direction[idx];
             residual[idx] = residual[idx] - alpha * bd[idx];
         }
@@ -78,17 +96,12 @@ pub(crate) fn subspace_minimize<T: Float>(
             break;
         }
         let beta = next_residual_norm / residual_norm;
-        for &idx in &free {
+        for &idx in free {
             direction[idx] = residual[idx] + beta * direction[idx];
         }
         residual_norm = next_residual_norm;
     }
-
-    let mut target = cauchy.to_vec();
-    for &idx in &free {
-        target[idx] = cauchy[idx] + step[idx];
-    }
-    feasible_model_step(cauchy, target, &model_gradient, bounds, memory)
+    step
 }
 
 fn feasible_model_step<T: Float>(
@@ -130,6 +143,10 @@ fn feasible_model_step<T: Float>(
         cauchy.to_vec()
     }
 }
+#[cfg(test)]
+#[path = "subspace_benchmarks.rs"]
+mod benchmarks;
+
 #[cfg(test)]
 mod tests {
     use super::feasible_model_step;

@@ -2,6 +2,7 @@
 
 mod bounds;
 mod cauchy;
+mod compact;
 mod line_search;
 mod memory;
 mod solver;

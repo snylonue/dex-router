@@ -1,4 +1,9 @@
-# Hessian history cache: validation and performance
+# L-BFGS-B performance validation
+
+The initial sections record the historical Hessian-cache-only change. The final
+section records fixed-coordinate elimination and compact subspace solving; its
+baseline includes the routing-preprocessing branch and uses the same initializer
+on both sides. The two comparisons must not be mixed.
 
 ## Diagnosis
 
@@ -133,3 +138,83 @@ The real-pool residual test passes independent trade/KKT checks for both the
 159-pool strict case and the 387-pool application case. The separate full-market
 strict-precision diagnosis still reports NumericalStagnation; caching does not
 resolve floating-point stagnation or make economic checks less strict.
+
+## Fixed-coordinate elimination and compact subspace solve
+
+The generic optimizer now excludes exact fixed coordinates from Cauchy/subspace
+models and secant history, including the gradient changes used to compute theta.
+Callbacks and public results still contain the full vector. If all remaining
+coordinates are free, this enables the two-loop inverse fast path. Genuinely
+restricted subspaces use a normalized low-rank, pivoted direct solve of order
+at most 2m, with residual verification/refinement and a CG numerical fallback.
+See [algorithm and cache invariants](<dexrouter-lbfgsb/ALGORITHM.md>).
+
+### Same-branch raw snapshot comparison
+
+Baseline: 26e7d6c on feat/equivalent-routing-preprocessing, already containing
+Hessian-product caching. The unchanged offline driver above retains a fixed
+anchor in its full API vector and directly calls the generic optimizer; it does
+not invoke checked routing decomposition/preconditioning. Same release setup,
+387 pools / 182 public variables / m=17 / 2000-iteration cap, three repetitions
+per version. No other agent-started CPU job ran during the timed measurements.
+
+| Phase | Baseline median | Fixed + compact median | Ratio |
+| --- | ---: | ---: | ---: |
+| Cold | 1.269460 s | 0.490470 s | 2.59x |
+| Warm | 1.165349 s | 0.455949 s | 2.56x |
+
+[All timing and numerical signatures](<dexrouter-lbfgsb/benchmarks/fixed_compact_snapshot.csv>).
+Both versions stop at MaxIterations; evaluations and fingerprints change
+because reducing y/theta and changing subspace arithmetic changes the model
+and trajectory. This is a fixed-budget speed comparison, not identical-work
+or economic-convergence evidence. In particular, a slightly better objective
+does not imply a better projected-gradient norm. The 600/700-pool user datasets
+are not available here.
+
+### Direct solve vs CG, including model setup
+
+[Microbenchmark](<dexrouter-lbfgsb/src/subspace_benchmarks.rs>): n=438, m=17,
+437 free variables, deterministic SPD-derived corrections and RHS, 500 solves
+per row, three repetitions. Input diagonal ratio is that of the SPD matrix
+generating y, not a measured condition number of the limited-memory B_FF.
+Fresh rows start with uninitialized history/model/factor caches for every
+solve; reused rows prime one history/factor first. Allocation of independent
+history clones is outside timing for both methods. Direct rows include the
+original BFGS residual check and assert direct solving actually succeeds.
+
+| Input diagonal ratio | History/factor | CG median | Direct median | Ratio |
+| ---: | --- | ---: | ---: | ---: |
+| 10 | Fresh | 0.293912 s | 0.350455 s | 0.84x |
+| 10 | Reused | 0.176793 s | 0.031048 s | 5.69x |
+| 10000 | Fresh | 0.411709 s | 0.301477 s | 1.37x |
+| 10000 | Reused | 0.317115 s | 0.031279 s | 10.14x |
+
+[Raw microbenchmark repetitions](<dexrouter-lbfgsb/benchmarks/compact_subspace.csv>).
+Fresh well-conditioned systems can be slower because full Gram assembly and
+factorization outweigh short CG runs. History usually changes on each outer
+iteration; the reused-factor ratio must not be advertised as an end-to-end
+speedup. The all-free two-loop path avoids compact setup altogether.
+
+### Correctness validation
+
+[Fixed-coordinate tests](<dexrouter-lbfgsb/tests/fixed_variables.rs>) compare
+f32/f64 full callbacks against a manually reduced coupled problem, including
+changing large fixed gradients, active bounds, hard budgets, failed searches,
+full returned gradients, nonfinite values, and callback errors. Coordinates
+with initially zero gradients and nonsingleton intervals remain optimizable.
+[Compact model tests](<dexrouter-lbfgsb/src/memory_compact_tests.rs>) compare
+principal-matrix solves against an independent dense reference across memory
+capacities 1/3/17, multiple scales, eviction, rejected updates, resets, and
+different masks on both sides of 2m. Factor reuse, singular/indefinite systems,
+fallback safeguards, clone independence and concurrent shared solves are covered.
+
+The checked 159-pool and 387-pool economic residual tests both pass. The full
+application case returns ConvergedProjectedGradient / assessment Converged:
+1517 iterations, 12033 evaluations, cost 1.705227399221e4, KKT allowance ratio
+0.3089, maximum deficit value 3.217e-7. Economic acceptance tolerances are unchanged.
+
+```sh
+RUSTFLAGS='-C link-arg=-fuse-ld=bfd' cargo test --release --workspace
+RUSTFLAGS='-C link-arg=-fuse-ld=bfd' cargo test --release -p dexrouter-optim --test real_pool_tests real_pool_residuals -- --ignored --nocapture --test-threads=1
+RUSTFLAGS='-C link-arg=-fuse-ld=bfd' cargo test --release -p dexrouter-lbfgsb --lib benchmark_compact_vs_cg -- --ignored --nocapture --test-threads=1
+```

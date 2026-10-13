@@ -2,11 +2,15 @@ use std::sync::OnceLock;
 
 use num_traits::Float;
 
-use crate::{axpy, dot};
+use crate::{all_finite, axpy, compact::CompactModel, dot, norm_inf};
 
 #[cfg(test)]
 #[path = "memory_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "memory_compact_tests.rs"]
+mod compact_tests;
 
 #[derive(Debug, Clone)]
 struct Correction<T> {
@@ -30,6 +34,7 @@ pub(crate) struct LbfgsMemory<T> {
     // Depends only on the correction history, never on the product's input or
     // the free-variable mask. OnceLock preserves shared-read thread safety.
     hessian_cache: OnceLock<Vec<HessianUpdate<T>>>,
+    compact_cache: OnceLock<Option<CompactModel<T>>>,
 }
 
 impl<T: Float> LbfgsMemory<T> {
@@ -39,6 +44,7 @@ impl<T: Float> LbfgsMemory<T> {
             pairs: Vec::with_capacity(capacity),
             theta: T::one(),
             hessian_cache: OnceLock::new(),
+            compact_cache: OnceLock::new(),
         }
     }
 
@@ -50,6 +56,7 @@ impl<T: Float> LbfgsMemory<T> {
         self.pairs.clear();
         self.theta = T::one();
         self.hessian_cache.take();
+        self.compact_cache.take();
     }
 
     pub(crate) fn push(&mut self, s: Vec<T>, y: Vec<T>) -> bool {
@@ -70,6 +77,7 @@ impl<T: Float> LbfgsMemory<T> {
         // Even without eviction, a new theta changes every B_i s_i. Appending
         // just one cached update would leave the old prefixes inconsistent.
         self.hessian_cache.take();
+        self.compact_cache.take();
         true
     }
 
@@ -107,6 +115,89 @@ impl<T: Float> LbfgsMemory<T> {
             apply_bfgs_update(&mut out, v, pair, update);
         }
         out
+    }
+
+    /// Solve B_FF step_F = rhs_F with a matrix of order at most 2m.
+    /// Reject unreliable compact solves so the caller can use the CG safeguard.
+    pub(crate) fn solve_reduced(&self, rhs: &[T], free: &[usize]) -> Option<Vec<T>> {
+        if !all_finite(rhs)
+            || free.last().is_some_and(|&i| i >= rhs.len())
+            || free.windows(2).any(|w| w[0] >= w[1])
+        {
+            return None;
+        }
+        let rhs_norm = free
+            .iter()
+            .fold(T::zero(), |norm, &i| norm.max(rhs[i].abs()));
+        if rhs_norm == T::zero() {
+            return Some(vec![T::zero(); rhs.len()]);
+        }
+        if self.is_empty() {
+            let mut step = vec![T::zero(); rhs.len()];
+            for &i in free {
+                step[i] = rhs[i];
+            }
+            return Some(step);
+        }
+        let model = self
+            .compact_cache
+            .get_or_init(|| self.build_compact_model())
+            .as_ref()?;
+        let mut step = model.solve(self.theta, rhs, free)?;
+        let tolerance = T::epsilon().sqrt() * rhs_norm;
+        // Check against the existing sequential BFGS arithmetic, not just the
+        // low-rank reconstruction. Two refinement steps reuse the same factor.
+        for refinement in 0..=2 {
+            let product = self.hessian_product(&step);
+            let mut residual = vec![T::zero(); rhs.len()];
+            for &i in free {
+                residual[i] = rhs[i] - product[i];
+            }
+            if !all_finite(&residual) {
+                return None;
+            }
+            if norm_inf(&residual) <= tolerance {
+                return Some(step);
+            }
+            if refinement == 2 {
+                break;
+            }
+            let correction = model.solve(self.theta, &residual, free)?;
+            axpy(&mut step, T::one(), &correction);
+            if !all_finite(&step) {
+                return None;
+            }
+        }
+        None
+    }
+
+    fn build_compact_model(&self) -> Option<CompactModel<T>> {
+        if !self.theta.is_finite() || self.theta <= T::zero() {
+            return None;
+        }
+        let cache = self
+            .hessian_cache
+            .get_or_init(|| self.build_hessian_cache());
+        let root_theta = self.theta.sqrt();
+        let mut basis = Vec::with_capacity(2 * self.pairs.len());
+        for (pair, update) in self.pairs.iter().zip(cache) {
+            if !update.sbs.is_finite() || update.sbs <= T::zero() {
+                return None;
+            }
+            let root_sbs = update.sbs.sqrt();
+            let root_ys = pair.ys.sqrt();
+            // B/theta = I + U J U^T, J = diag(-1,+1,...).
+            // Normalize the columns to avoid raw s/y magnitude disparities.
+            basis.push(
+                update
+                    .bs
+                    .iter()
+                    .map(|&v| (v / root_sbs) / root_theta)
+                    .collect(),
+            );
+            basis.push(pair.y.iter().map(|&v| (v / root_ys) / root_theta).collect());
+        }
+        CompactModel::new(basis)
     }
 
     fn build_hessian_cache(&self) -> Vec<HessianUpdate<T>> {

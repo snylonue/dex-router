@@ -27,6 +27,11 @@ impl<T: Float> Bound<T> {
         Self::new(Some(lower), Some(upper))
     }
 
+    /// True only for a supplied finite singleton interval, never an active bound.
+    pub fn is_fixed(&self) -> bool {
+        matches!((self.lower, self.upper), (Some(l), Some(u)) if l.is_finite() && l == u)
+    }
+
     pub fn validate(&self) -> anyhow::Result<()> {
         if let Some(lower) = self.lower {
             anyhow::ensure!(lower.is_finite(), "lower bound must be finite");
