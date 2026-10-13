@@ -14,6 +14,14 @@ pub struct MarketEvaluation {
 pub trait Market {
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]);
 
+    /// Local support curvature in relative-price increments:
+    /// d² arb = w * (dp0 / p0 - dp1 / p1)². At region boundaries an
+    /// adjacent-region curvature may be returned; this is a step model only.
+    /// None keeps custom markets compatible with numerical curvature probes.
+    fn relative_curvature(&self, _v: [f64; 2]) -> Option<f64> {
+        None
+    }
+
     /// Accurate support-function change using already evaluated trades.
     fn value_change(
         &self,

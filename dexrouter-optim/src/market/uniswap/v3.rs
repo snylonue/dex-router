@@ -97,6 +97,24 @@ impl UniswapV3 {
 }
 
 impl Market for UniswapV3 {
+    fn relative_curvature(&self, v: [f64; 2]) -> Option<f64> {
+        let region = self.local_region(v);
+        let liquidity = region.1.map_or_else(
+            || {
+                if region.0 == 0 && self.fee == 1.0 {
+                    self.liquidity
+                        .get(self.current_tick)
+                        .copied()
+                        .unwrap_or(0.0)
+                } else {
+                    0.0
+                }
+            },
+            |i| self.liquidity[i],
+        );
+        Some(0.5 * liquidity / self.fee.sqrt() * v[0].sqrt() * v[1].sqrt())
+    }
+
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
         let trade = self.evaluate(v);
         (trade.input, trade.output)

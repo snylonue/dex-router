@@ -19,6 +19,24 @@ pub trait UtilityConjugate {
 
     fn upper_bounds(&self) -> Array1<f64>;
 
+    /// Opt in only when the finite objective is a sum of per-token terms and
+    /// its domain is exactly the supplied box. Unknown utilities stay coupled.
+    fn is_separable(&self) -> bool {
+        false
+    }
+
+    /// Promise that this coordinate has no objective effect anywhere in the
+    /// supplied box. Used only to omit isolated, market-free price variables.
+    fn is_constant_coordinate(&self, _index: usize) -> bool {
+        false
+    }
+
+    /// Exact diagonal Hessian on the finite domain. Returning Some also promises
+    /// that off-diagonal entries vanish; None preserves finite-difference fallback.
+    fn diagonal_hessian(&self, _v: &Array1<f64>) -> Option<Array1<f64>> {
+        None
+    }
+
     /// Optional normalization for a nonnegative, degree-one homogeneous dual.
     /// The utility must guarantee that fixing this price to its lower bound
     /// preserves the mathematical optimum. Numerical floors are separate.
@@ -60,6 +78,18 @@ impl NonnegativeLinear {
 }
 
 impl UtilityConjugate for NonnegativeLinear {
+    fn is_constant_coordinate(&self, _index: usize) -> bool {
+        true
+    }
+
+    fn is_separable(&self) -> bool {
+        true
+    }
+
+    fn diagonal_hessian(&self, v: &Array1<f64>) -> Option<Array1<f64>> {
+        Some(Array1::zeros(v.len()))
+    }
+
     fn value(&self, v: &Array1<f64>) -> f64 {
         if self.feasible(v) { 0.0 } else { f64::INFINITY }
     }
@@ -95,6 +125,18 @@ pub struct BasketLiquidation {
 }
 
 impl UtilityConjugate for BasketLiquidation {
+    fn is_constant_coordinate(&self, index: usize) -> bool {
+        index == self.out || self.inputs[index] == 0.0
+    }
+
+    fn is_separable(&self) -> bool {
+        true
+    }
+
+    fn diagonal_hessian(&self, v: &Array1<f64>) -> Option<Array1<f64>> {
+        Some(Array1::zeros(v.len()))
+    }
+
     fn value_change(&self, v: &Array1<f64>, reference: &Array1<f64>) -> f64 {
         if v[self.out] < 1.0 || reference[self.out] < 1.0 {
             return f64::INFINITY;

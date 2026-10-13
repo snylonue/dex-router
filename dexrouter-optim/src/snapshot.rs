@@ -105,6 +105,38 @@ pub struct FullMarketRoute {
     pub stats: LoadStats,
 }
 
+impl FullMarketRoute {
+    /// Reuse a previous solution by token identity, not token ordering. New tokens
+    /// retain graph-fitted initial prices. This changes no pool or utility bound.
+    pub fn warm_start_prices(
+        &self,
+        previous_tokens: &[String],
+        previous_prices: &Array1<f64>,
+    ) -> anyhow::Result<Array1<f64>> {
+        anyhow::ensure!(
+            previous_tokens.len() == previous_prices.len(),
+            "warm-start length mismatch"
+        );
+        let mut previous = HashMap::new();
+        for (token, &price) in previous_tokens.iter().zip(previous_prices) {
+            anyhow::ensure!(price.is_finite() && price > 0.0, "invalid warm-start price");
+            anyhow::ensure!(
+                previous.insert(token.as_str(), price).is_none(),
+                "duplicate warm-start token"
+            );
+        }
+        let mut price = self.initial_price.clone();
+        for (i, token) in self.tokens.iter().enumerate() {
+            if token == ANCHOR_TOKEN {
+                price[i] = 1.0;
+            } else if let Some(&old) = previous.get(token.as_str()) {
+                price[i] = old;
+            }
+        }
+        Ok(price)
+    }
+}
+
 pub fn load_full_market_route(path: impl AsRef<Path>) -> anyhow::Result<FullMarketRoute> {
     let pools: Vec<RawUniswapV3Pool> = serde_json::from_reader(fs::File::open(path)?)?;
     build_full_market_route(pools)
@@ -155,7 +187,9 @@ pub fn build_full_market_route_with_tvl(
     let anchor = *token_index
         .get(ANCHOR_TOKEN)
         .ok_or_else(|| anyhow::anyhow!("anchor token {ANCHOR_TOKEN} is absent after filtering"))?;
-    let initial_price = initial_prices(tokens.len(), anchor, &edges);
+    // Preserve the existing pool-selection policy. The improved initializer must
+    // not change TVL filtering, hence cannot remove or add economic opportunities.
+    let initial_price = initial_prices_bfs(tokens.len(), anchor, &edges);
 
     let before_tvl_filter = accepted.len();
     accepted.retain(|pool| {
@@ -361,7 +395,7 @@ fn is_price_outlier(
         .is_some_and(|median| (log_price - median).abs() > OUTLIER_LOG_TOLERANCE)
 }
 
-fn initial_prices(tokens: usize, anchor: usize, edges: &[PriceEdge]) -> Array1<f64> {
+fn initial_prices_bfs(tokens: usize, anchor: usize, edges: &[PriceEdge]) -> Array1<f64> {
     let pair_prices = median_token_pair_prices(edges);
     let mut adjacency = vec![Vec::<(usize, f64)>::new(); tokens];
     for ((token0, token1), log_price) in pair_prices {
@@ -396,6 +430,100 @@ fn initial_prices(tokens: usize, anchor: usize, edges: &[PriceEdge]) -> Array1<f
             log_price.exp().max(lower_bound)
         } else {
             1.0_f64.max(lower_bound)
+        }
+    }))
+}
+
+// Fit q_a - q_b to pair-median log prices. Pair observation counts supply
+// deterministic confidence weights. Logs are used for initialization only;
+// the economic objective is still optimized in affine price coordinates.
+fn initial_prices(tokens: usize, anchor: usize, edges: &[PriceEdge]) -> Array1<f64> {
+    let medians = median_token_pair_prices(edges);
+    let mut counts = HashMap::<(usize, usize), usize>::new();
+    for edge in edges {
+        *counts
+            .entry((edge.token0.min(edge.token1), edge.token0.max(edge.token1)))
+            .or_default() += 1;
+    }
+    let mut pairs: Vec<_> = medians
+        .into_iter()
+        .filter(|((a, b), _)| a != b)
+        .map(|((a, b), r)| (a, b, r, counts[&(a, b)] as f64))
+        .collect();
+    pairs.sort_by_key(|&(a, b, _, _)| (a, b));
+    let groups = crate::graph::components(tokens, pairs.iter().map(|&(a, b, _, _)| (a, b)));
+    let mut fixed = vec![false; tokens];
+    let mut adjacency = vec![Vec::new(); tokens];
+    for &(a, b, r, _) in &pairs {
+        adjacency[a].push((b, -r));
+        adjacency[b].push((a, r));
+    }
+    let mut logs = vec![f64::NAN; tokens];
+    for group in groups {
+        // A gauge for the initializer only, not a new solver/economic constraint.
+        let root = if group.contains(&anchor) {
+            anchor
+        } else {
+            group[0]
+        };
+        fixed[root] = true;
+        logs[root] = 0.0;
+        let mut queue = VecDeque::from([root]);
+        while let Some(a) = queue.pop_front() {
+            for &(b, delta) in &adjacency[a] {
+                if logs[b].is_nan() {
+                    logs[b] = logs[a] + delta;
+                    queue.push_back(b);
+                }
+            }
+        }
+    }
+    let mut diagonal = vec![0.0; tokens];
+    let mut rhs = vec![0.0; tokens];
+    for &(a, b, r, w) in &pairs {
+        let residual = w * (r - (logs[a] - logs[b]));
+        rhs[a] += residual;
+        rhs[b] -= residual;
+        diagonal[a] += w;
+        diagonal[b] += w;
+    }
+    for i in 0..tokens {
+        if fixed[i] {
+            diagonal[i] = 1.0;
+            rhs[i] = 0.0;
+        }
+    }
+    let correction = crate::graph::pcg(&diagonal, &rhs, |x| {
+        let mut out = vec![0.0; tokens];
+        for &(a, b, _, w) in &pairs {
+            let delta = w * (if fixed[a] { 0.0 } else { x[a] } - if fixed[b] { 0.0 } else { x[b] });
+            out[a] += delta;
+            out[b] -= delta;
+        }
+        for i in 0..tokens {
+            if fixed[i] {
+                out[i] = x[i];
+            }
+        }
+        out
+    });
+    if let Some(correction) = correction {
+        let candidate: Vec<_> = logs.iter().zip(correction).map(|(q, d)| q + d).collect();
+        let error = |q: &[f64]| {
+            pairs
+                .iter()
+                .map(|&(a, b, r, w)| w * (q[a] - q[b] - r).powi(2))
+                .sum::<f64>()
+        };
+        if candidate.iter().all(|q| q.is_finite()) && error(&candidate) <= error(&logs) {
+            logs = candidate;
+        }
+    }
+    Array1::from_iter(logs.into_iter().enumerate().map(|(i, q)| {
+        if i == anchor {
+            1.0
+        } else {
+            q.clamp(-700.0, 700.0).exp()
         }
     }))
 }
@@ -497,6 +625,126 @@ mod tests {
         assert!((prices[0] - 2000.0).abs() < 1e-6);
         assert!((prices[2] - 1.0).abs() < 1e-8);
         assert!(prices[1] >= 1.0);
+    }
+
+    #[test]
+    fn graph_fit_uses_cycles_and_is_independent_of_pool_order() {
+        let edges = vec![
+            PriceEdge {
+                token0: 0,
+                token1: 1,
+                log_price: 0.0,
+            },
+            PriceEdge {
+                token0: 1,
+                token1: 2,
+                log_price: 0.0,
+            },
+            PriceEdge {
+                token0: 0,
+                token1: 2,
+                log_price: 3.0,
+            },
+            PriceEdge {
+                token0: 3,
+                token1: 4,
+                log_price: 2.0,
+            },
+        ];
+        let fitted = initial_prices(6, 0, &edges);
+        assert!((fitted[1].ln() + 1.0).abs() < 1e-10);
+        assert!((fitted[2].ln() + 2.0).abs() < 1e-10);
+        assert!((fitted[3] / fitted[4] - 2.0_f64.exp()).abs() < 1e-10);
+        assert_eq!(fitted[0], 1.0);
+        assert_eq!(fitted[5], 1.0);
+        let mut reversed = edges;
+        reversed.reverse();
+        assert_eq!(fitted, initial_prices(6, 0, &reversed));
+        let bfs = initial_prices_bfs(6, 0, &reversed);
+        let error = |p: &Array1<f64>| {
+            reversed
+                .iter()
+                .map(|edge| (p[edge.token0].ln() - p[edge.token1].ln() - edge.log_price).powi(2))
+                .sum::<f64>()
+        };
+        assert!(error(&fitted) < error(&bfs));
+    }
+
+    #[test]
+    fn warm_start_matches_token_identity_and_preserves_route() {
+        let pools = vec![
+            raw_pool("USDC", "A", 1.0, vec![0.5, 2.0], vec![100_000.0, 0.0]),
+            raw_pool("USDC", "B", 1.0, vec![0.5, 2.0], vec![100_000.0, 0.0]),
+        ];
+        let full = build_full_market_route_with_tvl(pools, 0.0).unwrap();
+        let previous_tokens = vec!["A".into(), "USDC".into(), "removed".into()];
+        let prices = full
+            .warm_start_prices(&previous_tokens, &arr1(&[1.2, 8.0, 3.0]))
+            .unwrap();
+        for (i, token) in full.tokens.iter().enumerate() {
+            match token.as_str() {
+                "A" => assert_eq!(prices[i], 1.2),
+                "USDC" => assert_eq!(prices[i], 1.0),
+                _ => assert_eq!(prices[i], full.initial_price[i]),
+            }
+        }
+        assert_eq!(full.route.markets.len(), 2);
+        assert!(
+            full.warm_start_prices(&previous_tokens, &arr1(&[1.0]))
+                .is_err()
+        );
+        assert!(
+            full.warm_start_prices(&previous_tokens, &arr1(&[f64::NAN, 1.0, 1.0]))
+                .is_err()
+        );
+        assert!(
+            full.warm_start_prices(&["A".into(), "A".into()], &arr1(&[1.0, 1.0]))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn fitted_initializer_does_not_change_tvl_pool_selection() {
+        let pools = vec![
+            raw_pool("USDC", "A", 1.0, vec![0.5, 2.0], vec![100_000.0, 0.0]),
+            raw_pool("A", "B", 2.0, vec![0.5, 3.0], vec![2000.0, 0.0]),
+            raw_pool("USDC", "B", 1.0, vec![0.5, 2.0], vec![4000.0, 0.0]),
+        ];
+        let accepted: Vec<_> = pools
+            .iter()
+            .map(|pool| AcceptedPool {
+                market: convert_pool(pool).unwrap(),
+                token0_symbol: pool.token0_symbol.clone(),
+                token1_symbol: pool.token1_symbol.clone(),
+                log_price: sqrt_price_to_log_price(pool.current_price),
+                current_price: pool.current_price,
+                lower_prices: pool.lower_prices.clone(),
+                liquidity: pool.liquidity.clone(),
+            })
+            .collect();
+        let (tokens, indices, _, edges) = indexed_route_parts(&accepted);
+        let old_prices = initial_prices_bfs(tokens.len(), indices[ANCHOR_TOKEN], &edges);
+        let cutoff = 3000.0;
+        let expected: Vec<_> = accepted
+            .iter()
+            .filter(|pool| {
+                active_pool_value(
+                    pool,
+                    old_prices[indices[&pool.token0_symbol]],
+                    old_prices[indices[&pool.token1_symbol]],
+                )
+                .is_some_and(|value| value >= cutoff)
+            })
+            .map(|pool| (&pool.token0_symbol, &pool.token1_symbol))
+            .collect();
+        let full = build_full_market_route_with_tvl(pools, cutoff).unwrap();
+        let actual: Vec<_> = full
+            .route
+            .markets
+            .iter()
+            .map(|(_, (a, b))| (&full.tokens[*a], &full.tokens[*b]))
+            .collect();
+        assert_eq!(actual, expected);
     }
 
     #[test]

@@ -3,6 +3,7 @@ use ndarray::{Array1, Array2};
 
 use crate::{market::Market, utility::UtilityConjugate};
 
+mod graph;
 pub mod market;
 mod numerics;
 pub mod snapshot;

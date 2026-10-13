@@ -16,6 +16,13 @@ pub struct SolveOptions {
     /// Reset curvature history and recompute the affine coordinate scales.
     pub restart_interval: usize,
     pub use_utility_anchor: bool,
+    /// Split only when the utility explicitly promises separability.
+    pub decompose: bool,
+    /// Prefer exact regional pool curvature; custom implementations fall back to probes.
+    pub analytic_curvature: bool,
+    /// Try graph-Newton recovery before coordinate recovery.
+    /// Damping affects the step matrix, never the economic objective.
+    pub graph_precondition: bool,
     /// Acceptance uses per-token turnover, never the number of pools/tokens.
     pub relative_residual_tolerance: f64,
     /// Absolute residual value in the objective's chosen price unit.
@@ -36,6 +43,9 @@ impl Default for SolveOptions {
             precondition: true,
             restart_interval: 500,
             use_utility_anchor: true,
+            decompose: true,
+            analytic_curvature: true,
+            graph_precondition: true,
             relative_residual_tolerance: 1e-8,
             absolute_residual_value: 1e-8,
         }
@@ -73,6 +83,9 @@ pub struct SolveDiagnostics {
     pub max_deficit_ratio: f64,
     pub numerical_lower_bounds: Array1<f64>,
     pub objective_scale: f64,
+    /// Fixed prices are absent from every optimizer vector.
+    pub optimizer_variables: usize,
+    pub optimization_blocks: usize,
 }
 
 impl SolveDiagnostics {
@@ -193,6 +206,7 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
             .zip(&upper)
             .map(|((&p, &l), &u)| p.max(l).min(u)),
     );
+    let blocks = optimization_blocks(&route, &lower, &upper, options.decompose);
     let mut evaluations = 0;
     let mut evaluate = |p: &Array1<f64>| -> anyhow::Result<RouteEvaluation> {
         evaluations += 1;
@@ -217,6 +231,7 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
     let mut line_search_failure = None;
     let mut scale = initial.clone();
     let mut pgtol = options.optimizer.pgtol;
+    let mut zero_progress_restarts = 0;
     // Probe/solver/verification costs share a single hard evaluation budget.
     drop(evaluate);
     let mut current = first;
@@ -233,39 +248,70 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
             status = Status::MaxEvaluations;
             break;
         }
-        if options.precondition
-            && evaluations + 2 * route.tokens + 2 < options.optimizer.max_evaluations
-        {
-            for i in 0..route.tokens {
-                if lower[i] == upper[i] {
-                    continue;
+        // No extra anchors are introduced. Eliminated-price residuals still
+        // participate in the independent, original-problem acceptance test.
+        let Some(block) = blocks.iter().max_by(|a, b| {
+            block_residual(a, &price, &current, &math_lower, &math_upper, &options).total_cmp(
+                &block_residual(b, &price, &current, &math_lower, &math_upper, &options),
+            )
+        }) else {
+            break;
+        };
+        if block_residual(block, &price, &current, &math_lower, &math_upper, &options) <= 1.0 {
+            break;
+        }
+        let curvature = if options.precondition && options.analytic_curvature {
+            relative_curvature(&route, &price)
+        } else {
+            None
+        };
+        if options.precondition {
+            if let Some(model) = &curvature {
+                for &i in &block.tokens {
+                    let diagonal = model.diagonal[i];
+                    if diagonal > 0.0 {
+                        let candidate = price[i] * (objective_scale / diagonal).sqrt();
+                        if candidate.is_finite() && candidate > 0.0 {
+                            scale[i] = candidate.clamp(initial[i] * 1e-6, initial[i] * 1e6);
+                        }
+                    }
                 }
-                let h = price[i] * 1e-4;
-                let mut plus = price.clone();
-                let mut minus = price.clone();
-                plus[i] = (price[i] + h).min(upper[i]);
-                minus[i] = (price[i] - h).max(lower[i]);
-                if plus[i] <= minus[i] {
-                    continue;
-                }
-                let gp = route.evaluate(&plus).gradient[i];
-                let gm = route.evaluate(&minus).gradient[i];
-                evaluations += 2;
-                let curvature = (gp - gm) / (plus[i] - minus[i]);
-                if curvature.is_finite() && curvature > 0.0 {
-                    scale[i] = (objective_scale / curvature)
-                        .sqrt()
-                        .clamp(initial[i] * 1e-6, initial[i] * 1e6);
+            } else {
+                for &i in &block.tokens {
+                    // Keep one verification and at least one optimizer evaluation.
+                    if evaluations + 4 >= options.optimizer.max_evaluations {
+                        break;
+                    }
+                    let h = price[i] * 1e-4;
+                    let mut plus = price.clone();
+                    let mut minus = price.clone();
+                    plus[i] = (price[i] + h).min(upper[i]);
+                    minus[i] = (price[i] - h).max(lower[i]);
+                    if plus[i] <= minus[i] {
+                        continue;
+                    }
+                    let gp = route.evaluate(&plus).gradient[i];
+                    let gm = route.evaluate(&minus).gradient[i];
+                    evaluations += 2;
+                    let diagonal = (gp - gm) / (plus[i] - minus[i]);
+                    if diagonal.is_finite() && diagonal > 0.0 {
+                        scale[i] = (objective_scale / diagonal)
+                            .sqrt()
+                            .clamp(initial[i] * 1e-6, initial[i] * 1e6);
+                    }
                 }
             }
         }
-        let bounds: Vec<_> = lower
+        let bounds: Vec<_> = block
+            .tokens
             .iter()
-            .zip(&upper)
-            .zip(&scale)
-            .zip(&price)
-            .map(|(((&l, &u), &s), &p)| {
-                Bound::new(Some((l - p) / s), u.is_finite().then_some((u - p) / s))
+            .map(|&i| {
+                Bound::new(
+                    Some((lower[i] - price[i]) / scale[i]),
+                    upper[i]
+                        .is_finite()
+                        .then_some((upper[i] - price[i]) / scale[i]),
+                )
             })
             .collect();
         let mut optimizer = options.optimizer.clone();
@@ -275,16 +321,17 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         optimizer.pgtol = pgtol;
         // Start at zero around the current physical price. Multiplicative
         // p / scale -> x * scale round trips can move a price by one ulp.
-        let result = minimize(vec![0.0; route.tokens], bounds, optimizer, |x, g| {
-            let p = physical_price(x, &price, &scale, &lower, &upper);
-            let (evaluation, cost_change) = route.evaluate_centered(&p, Some((&price, &current)));
-            let gradient = &evaluation.gradient * &scale / objective_scale;
-            g.copy_from_slice(gradient.as_slice().unwrap());
+        let result = minimize(vec![0.0; block.tokens.len()], bounds, optimizer, |x, g| {
+            let p = physical_price(x, &block.tokens, &price, &scale, &lower, &upper);
+            let (gradient, cost_change) = evaluate_block(&route, block, &p, &price, &current);
+            for (local, &i) in block.tokens.iter().enumerate() {
+                g[local] = gradient[local] * scale[i] / objective_scale;
+            }
             Ok(cost_change / objective_scale)
         })?;
         evaluations += result.evaluations;
         iterations += result.iterations;
-        let next_price = physical_price(&result.x, &price, &scale, &lower, &upper);
+        let next_price = physical_price(&result.x, &block.tokens, &price, &scale, &lower, &upper);
         let unchanged = next_price == price;
         price = next_price;
         status = result.status;
@@ -295,20 +342,40 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         if ratios.0 <= 1.0 && ratios.2 <= 1.0 {
             break;
         }
-        if matches!(status, Status::LineSearchFailed | Status::MaxIterations)
+        if matches!(
+            status,
+            Status::LineSearchFailed
+                | Status::MaxIterations
+                | Status::ConvergedProjectedGradient
+                | Status::ConvergedFunctionReduction
+        ) && block_residual(block, &price, &current, &math_lower, &math_upper, &options) > 1.0
             && options.precondition
             && iterations < options.optimizer.max_iterations
             && evaluations + 2 < options.optimizer.max_evaluations
         {
             let before = price.clone();
-            coordinate_sweep(
-                &route,
-                &mut price,
-                &lower,
-                &upper,
-                &options,
-                &mut evaluations,
-            );
+            let graph_recovered = options.graph_precondition
+                && options.analytic_curvature
+                && graph_recovery(
+                    &route,
+                    block,
+                    &mut price,
+                    &current,
+                    &lower,
+                    &upper,
+                    &options,
+                    &mut evaluations,
+                );
+            if !graph_recovered {
+                coordinate_sweep(
+                    &route,
+                    &mut price,
+                    &lower,
+                    &upper,
+                    &options,
+                    &mut evaluations,
+                );
+            }
             let (recovered, change) = route.evaluate_centered(&price, Some((&before, &current)));
             if change.is_finite() && change <= 0.0 {
                 current = recovered;
@@ -326,21 +393,28 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
                 break;
             }
             if price != before {
+                zero_progress_restarts = 0;
                 restarts += 1;
                 continue;
             }
         }
+        if result.iterations == 0 {
+            zero_progress_restarts += 1;
+        } else {
+            zero_progress_restarts = 0;
+        }
         if status == Status::MaxEvaluations
             || (status == Status::LineSearchFailed && result.iterations == 0)
             || (unchanged && status != Status::ConvergedProjectedGradient)
-            || (result.iterations == 0 && restarts >= 8)
+            || zero_progress_restarts >= 8
         {
             break;
         }
         if matches!(
             status,
             Status::ConvergedProjectedGradient | Status::ConvergedFunctionReduction
-        ) {
+        ) && block_residual(block, &price, &current, &math_lower, &math_upper, &options) > 1.0
+        {
             // A generic convergence test is not routing acceptance. Retry with
             // fresh curvature and a tighter generic tolerance, within budget.
             pgtol *= 0.1;
@@ -401,7 +475,323 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         max_deficit_ratio: deficit_ratio,
         numerical_lower_bounds: lower,
         objective_scale,
+        optimizer_variables: blocks.iter().map(|b| b.tokens.len()).sum(),
+        optimization_blocks: blocks.len(),
     })
+}
+
+#[derive(Debug)]
+struct OptimizationBlock {
+    tokens: Vec<usize>,
+    markets: Vec<usize>,
+}
+
+fn optimization_blocks<U: UtilityConjugate, M: Market>(
+    route: &Route<U, M>,
+    lower: &Array1<f64>,
+    upper: &Array1<f64>,
+    decompose: bool,
+) -> Vec<OptimizationBlock> {
+    let mut incident = vec![false; route.tokens];
+    for (_, (a, b)) in &route.markets {
+        incident[*a] = true;
+        incident[*b] = true;
+    }
+    let retained: Vec<_> = (0..route.tokens)
+        .map(|i| {
+            lower[i] != upper[i] && (incident[i] || !route.objective.is_constant_coordinate(i))
+        })
+        .collect();
+    let free: Vec<_> = (0..route.tokens).filter(|&i| retained[i]).collect();
+    let groups = if decompose && route.objective.is_separable() {
+        // Removing fixed vertices is exact: incident pools are functions of just
+        // their remaining free endpoint, not couplings between its neighbors.
+        crate::graph::components(
+            route.tokens,
+            route
+                .markets
+                .iter()
+                .filter_map(|(_, (a, b))| (retained[*a] && retained[*b]).then_some((*a, *b))),
+        )
+        .into_iter()
+        .map(|group| {
+            group
+                .into_iter()
+                .filter(|&i| retained[i])
+                .collect::<Vec<_>>()
+        })
+        .filter(|group| !group.is_empty())
+        .collect::<Vec<_>>()
+    } else if free.is_empty() {
+        Vec::new()
+    } else {
+        vec![free]
+    };
+    let mut owner = vec![usize::MAX; route.tokens];
+    let mut blocks: Vec<_> = groups
+        .into_iter()
+        .enumerate()
+        .map(|(id, tokens)| {
+            for &i in &tokens {
+                owner[i] = id;
+            }
+            OptimizationBlock {
+                tokens,
+                markets: Vec::new(),
+            }
+        })
+        .collect();
+    for (index, (_, (a, b))) in route.markets.iter().enumerate() {
+        let id = if owner[*a] != usize::MAX {
+            owner[*a]
+        } else {
+            owner[*b]
+        };
+        if id != usize::MAX {
+            blocks[id].markets.push(index);
+        }
+    }
+    blocks
+}
+
+fn block_residual(
+    block: &OptimizationBlock,
+    price: &Array1<f64>,
+    current: &RouteEvaluation,
+    lower: &Array1<f64>,
+    upper: &Array1<f64>,
+    options: &SolveOptions,
+) -> f64 {
+    block
+        .tokens
+        .iter()
+        .map(|&i| {
+            let allowance = options.absolute_residual_value
+                + options.relative_residual_tolerance * current.turnover[i] * price[i];
+            kkt_gradient(price[i], current.gradient[i], lower[i], upper[i]).abs() * price[i]
+                / allowance
+        })
+        .fold(0.0, f64::max)
+}
+
+// Outside-block prices are unchanged. For an opted-in separable utility this
+// is exactly the original centered objective with constant pool terms omitted.
+fn evaluate_block<U: UtilityConjugate, M: Market>(
+    route: &Route<U, M>,
+    block: &OptimizationBlock,
+    price: &Array1<f64>,
+    reference_price: &Array1<f64>,
+    reference: &RouteEvaluation,
+) -> (Vec<f64>, f64) {
+    let utility_gradient = route.objective.grad(price);
+    let mut gradient = vec![crate::numerics::Sum::default(); block.tokens.len()];
+    for (local, &i) in block.tokens.iter().enumerate() {
+        gradient[local].add(utility_gradient[i]);
+    }
+    let mut change = crate::numerics::Sum::default();
+    change.add(route.objective.value_change(price, reference_price));
+    for &index in &block.markets {
+        let (market, (a, b)) = &route.markets[index];
+        let v = [price[*a], price[*b]];
+        let trade = market.evaluate(v);
+        change.add(market.value_change(
+            v,
+            [reference_price[*a], reference_price[*b]],
+            trade,
+            reference.market_evaluations[index],
+        ));
+        for (local, token) in [*a, *b].into_iter().enumerate() {
+            if let Ok(index) = block.tokens.binary_search(&token) {
+                gradient[index].add(trade.output[local] - trade.input[local]);
+            }
+        }
+    }
+    (
+        gradient
+            .into_iter()
+            .map(crate::numerics::Sum::total)
+            .collect(),
+        change.total(),
+    )
+}
+
+struct RelativeCurvature {
+    utility_diagonal: Vec<f64>,
+    diagonal: Vec<f64>,
+    edges: Vec<(usize, usize, f64)>,
+}
+
+impl RelativeCurvature {
+    fn apply(&self, x: &[f64]) -> Vec<f64> {
+        let mut out: Vec<_> = x
+            .iter()
+            .zip(&self.utility_diagonal)
+            .map(|(x, d)| x * d)
+            .collect();
+        for &(a, b, w) in &self.edges {
+            let delta = w * (x[a] - x[b]);
+            out[a] += delta;
+            out[b] -= delta;
+        }
+        out
+    }
+}
+
+fn relative_curvature<U: UtilityConjugate, M: Market>(
+    route: &Route<U, M>,
+    price: &Array1<f64>,
+) -> Option<RelativeCurvature> {
+    let utility = route.objective.diagonal_hessian(price)?;
+    if utility.len() != route.tokens {
+        return None;
+    }
+    let utility_diagonal: Vec<_> = utility
+        .iter()
+        .zip(price)
+        .map(|(&h, &p)| h * p * p)
+        .collect();
+    let mut diagonal = utility_diagonal.clone();
+    let mut edges = Vec::with_capacity(route.markets.len());
+    for (market, (a, b)) in &route.markets {
+        let weight = market.relative_curvature([price[*a], price[*b]])?;
+        if !weight.is_finite() || weight < 0.0 {
+            return None;
+        }
+        if a != b && weight > 0.0 {
+            diagonal[*a] += weight;
+            diagonal[*b] += weight;
+            edges.push((*a, *b, weight));
+        }
+    }
+    if utility_diagonal
+        .iter()
+        .chain(&diagonal)
+        .any(|d| !d.is_finite() || *d < 0.0)
+    {
+        return None;
+    }
+    Some(RelativeCurvature {
+        utility_diagonal,
+        diagonal,
+        edges,
+    })
+}
+
+// Sparse Newton-CG in relative increments. Bound-active coordinates are masked;
+// box projection and an Armijo test on g (not the damped model) safeguard the step.
+#[allow(clippy::too_many_arguments)]
+fn graph_recovery<U: UtilityConjugate, M: Market>(
+    route: &Route<U, M>,
+    block: &OptimizationBlock,
+    price: &mut Array1<f64>,
+    current: &RouteEvaluation,
+    lower: &Array1<f64>,
+    upper: &Array1<f64>,
+    options: &SolveOptions,
+    evaluations: &mut usize,
+) -> bool {
+    let Some(model) = relative_curvature(route, price) else {
+        return false;
+    };
+    let mut movable = vec![false; route.tokens];
+    for &i in &block.tokens {
+        movable[i] = !((price[i] <= lower[i] && current.gradient[i] >= 0.0)
+            || (price[i] >= upper[i] && current.gradient[i] <= 0.0));
+    }
+    let normalization = block
+        .tokens
+        .iter()
+        .map(|&i| model.diagonal[i])
+        .fold(0.0, f64::max);
+    if normalization <= 0.0 {
+        return false;
+    }
+    let damping = 1e-8;
+    let math_lower = route.objective.lower_bounds();
+    let math_upper = route.objective.upper_bounds();
+    let before_ratio = block_residual(block, price, current, &math_lower, &math_upper, options);
+    let diagonal: Vec<_> = (0..route.tokens)
+        .map(|i| {
+            if movable[i] {
+                model.diagonal[i] / normalization + damping
+            } else {
+                1.0
+            }
+        })
+        .collect();
+    let rhs: Vec<_> = (0..route.tokens)
+        .map(|i| {
+            if movable[i] {
+                -current.gradient[i] * price[i] / normalization
+            } else {
+                0.0
+            }
+        })
+        .collect();
+    let Some(direction) = crate::graph::pcg(&diagonal, &rhs, |x| {
+        let masked: Vec<_> = x
+            .iter()
+            .enumerate()
+            .map(|(i, &x)| if movable[i] { x } else { 0.0 })
+            .collect();
+        let product = model.apply(&masked);
+        product
+            .iter()
+            .enumerate()
+            .map(|(i, &h)| {
+                if movable[i] {
+                    h / normalization + damping * x[i]
+                } else {
+                    x[i]
+                }
+            })
+            .collect()
+    }) else {
+        return false;
+    };
+    let norm = direction.iter().map(|x| x.abs()).fold(0.0, f64::max);
+    if norm == 0.0 {
+        return false;
+    }
+    let mut alpha = (0.5 / norm).min(1.0);
+    for _ in 0..20 {
+        // Reserve the caller's original-objective verification evaluation.
+        if *evaluations + 1 >= options.optimizer.max_evaluations {
+            break;
+        }
+        let mut candidate = price.clone();
+        let mut slope = crate::numerics::Sum::default();
+        for &i in &block.tokens {
+            candidate[i] = (alpha * direction[i])
+                .mul_add(price[i], price[i])
+                .max(lower[i])
+                .min(upper[i]);
+            slope.add(current.gradient[i] * (candidate[i] - price[i]));
+        }
+        let slope = slope.total();
+        if slope.is_finite() && slope < 0.0 && candidate != *price {
+            let (evaluation, change) = route.evaluate_centered(&candidate, Some((price, current)));
+            *evaluations += 1;
+            let after_ratio = block_residual(
+                block,
+                &candidate,
+                &evaluation,
+                &math_lower,
+                &math_upper,
+                options,
+            );
+            if change.is_finite()
+                && change <= 1e-4 * slope
+                && evaluation.gradient.iter().all(|g| g.is_finite())
+                && (after_ratio <= 1.0 || after_ratio < 0.9 * before_ratio)
+            {
+                *price = candidate;
+                return true;
+            }
+        }
+        alpha *= 0.5;
+    }
+    false
 }
 
 // Recover narrow fee/tick regions by solving bounded convex coordinates.
@@ -495,18 +885,17 @@ fn coordinate_sweep<U: UtilityConjugate, M: Market>(
 
 fn physical_price(
     x: &[f64],
+    tokens: &[usize],
     origin: &Array1<f64>,
     scale: &Array1<f64>,
     lower: &Array1<f64>,
     upper: &Array1<f64>,
 ) -> Array1<f64> {
-    Array1::from_iter(
-        x.iter()
-            .zip(scale)
-            .zip(origin)
-            .zip(lower.iter().zip(upper))
-            .map(|(((&x, &s), &p), (&l, &u))| x.mul_add(s, p).max(l).min(u)),
-    )
+    let mut price = origin.clone();
+    for (&x, &i) in x.iter().zip(tokens) {
+        price[i] = x.mul_add(scale[i], origin[i]).max(lower[i]).min(upper[i]);
+    }
+    price
 }
 
 fn kkt_gradient(price: f64, gradient: f64, lower: f64, upper: f64) -> f64 {
@@ -546,6 +935,107 @@ mod tests {
     use super::*;
     use crate::{market::UniswapV2, utility::NonnegativeLinear};
     use ndarray::arr1;
+
+    #[test]
+    fn block_kernel_is_the_original_centered_objective_and_gradient() {
+        let route = Route {
+            objective: crate::utility::BasketLiquidation {
+                out: 0,
+                inputs: arr1(&[0.0, 10.0, 20.0, 0.0]),
+            },
+            markets: vec![
+                (UniswapV2::new(1000.0, 2000.0, 0.997), (0, 1)),
+                (UniswapV2::new(700.0, 3000.0, 0.997), (0, 2)),
+            ],
+            tokens: 4,
+        };
+        let reference_price = arr1(&[1.0, 0.4, 0.3, 9.0]);
+        let reference = route.evaluate(&reference_price);
+        let lower = arr1(&[1.0, 0.0, 0.0, 0.0]);
+        let upper = arr1(&[1.0, f64::INFINITY, f64::INFINITY, f64::INFINITY]);
+        let blocks = optimization_blocks(&route, &lower, &upper, true);
+        assert_eq!(blocks.len(), 2);
+        for block in blocks {
+            let mut price = reference_price.clone();
+            for &i in &block.tokens {
+                price[i] *= 1.1;
+            }
+            let (gradient, change) =
+                evaluate_block(&route, &block, &price, &reference_price, &reference);
+            let (full, full_change) =
+                route.evaluate_centered(&price, Some((&reference_price, &reference)));
+            assert!((change - full_change).abs() < 1e-12);
+            for (local, &i) in block.tokens.iter().enumerate() {
+                assert_eq!(gradient[local], full.gradient[i]);
+            }
+        }
+    }
+
+    #[test]
+    fn graph_recovery_preserves_bounds_objective_and_budget() {
+        let route = Route {
+            objective: crate::utility::BasketLiquidation {
+                out: 0,
+                inputs: arr1(&[0.0, 10.0]),
+            },
+            markets: vec![(UniswapV2::new(1000.0, 2000.0, 0.997), (0, 1))],
+            tokens: 2,
+        };
+        let lower = arr1(&[1.0, 0.01]);
+        let upper = arr1(&[1.0, f64::INFINITY]);
+        let blocks = optimization_blocks(&route, &lower, &upper, true);
+        let mut price = arr1(&[1.0, 0.4]);
+        let current = route.evaluate(&price);
+        let mut evaluations = 1;
+        let options = SolveOptions::default();
+        assert!(graph_recovery(
+            &route,
+            &blocks[0],
+            &mut price,
+            &current,
+            &lower,
+            &upper,
+            &options,
+            &mut evaluations
+        ));
+        assert_eq!(price[0], 1.0);
+        assert!(price[1] >= lower[1]);
+        let next = route.evaluate(&price);
+        assert!(next.cost < current.cost);
+        let math_lower = route.objective.lower_bounds();
+        let math_upper = route.objective.upper_bounds();
+        assert!(
+            block_residual(
+                &blocks[0],
+                &price,
+                &next,
+                &math_lower,
+                &math_upper,
+                &options
+            ) < block_residual(
+                &blocks[0],
+                &arr1(&[1.0, 0.4]),
+                &current,
+                &math_lower,
+                &math_upper,
+                &options
+            )
+        );
+        let mut no_budget = options;
+        no_budget.optimizer.max_evaluations = evaluations + 1;
+        let before = price.clone();
+        assert!(!graph_recovery(
+            &route,
+            &blocks[0],
+            &mut price,
+            &next,
+            &lower,
+            &upper,
+            &no_budget,
+            &mut evaluations
+        ));
+        assert_eq!(before, price);
+    }
 
     #[test]
     fn coordinate_recovery_finds_root_or_active_bound_from_either_side() {

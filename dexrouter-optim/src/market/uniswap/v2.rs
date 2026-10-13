@@ -23,6 +23,20 @@ impl UniswapV2 {
 }
 
 impl Market for UniswapV2 {
+    fn relative_curvature(&self, v: [f64; 2]) -> Option<f64> {
+        let weighted = [self.reserves[0] * v[0], self.reserves[1] * v[1]];
+        let active = self.fee == 1.0
+            || weighted[1] * self.fee > weighted[0]
+            || weighted[0] * self.fee > weighted[1];
+        Some(if active {
+            0.5 * self.reserves[0].sqrt() * self.reserves[1].sqrt() / self.fee.sqrt()
+                * v[0].sqrt()
+                * v[1].sqrt()
+        } else {
+            0.0
+        })
+    }
+
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
         let trade = self.evaluate(v);
         (trade.input, trade.output)
