@@ -70,6 +70,8 @@ where
     let mut previous_derivative = derphi0;
     let mut step = initial_step.min(step_max);
     let mut bracket: Option<ZoomBracket<T>> = None;
+    let mut last_bracket_width = T::infinity();
+    let mut older_bracket_width = T::infinity();
     for iteration in 0..options.max_line_search_steps {
         if outcome.evaluations >= evaluation_budget {
             outcome.evaluation_limit = true;
@@ -77,7 +79,22 @@ where
             return Ok(outcome);
         }
         if let Some(b) = &bracket {
-            step = b.trial_step();
+            let width = (b.high_step - b.low_step).abs();
+            // Clipping interpolation to 10% of the interval does not guarantee
+            // useful progress: it can repeatedly move the same endpoint while
+            // the slope barely changes. Require contraction over two zoom
+            // updates before allowing further interpolation at the same end.
+            let interpolated = b.trial_step();
+            let signed_width = b.high_step - b.low_step;
+            let clipped = interpolated == b.low_step + cast::<T>(0.1) * signed_width
+                || interpolated == b.low_step + cast::<T>(0.9) * signed_width;
+            step = if clipped && width >= cast::<T>(0.66) * older_bracket_width {
+                b.low_step / cast(2.) + b.high_step / cast(2.)
+            } else {
+                interpolated
+            };
+            older_bracket_width = last_bracket_width;
+            last_bracket_width = width;
             // Adjacent representable endpoints: never accept an unchecked "best" trial.
             if step == b.low_step || step == b.high_step {
                 outcome.failure = Some(LineSearchFailure::NumericalStagnation);
