@@ -1,3 +1,6 @@
+#[path = "cubic.rs"]
+mod cubic;
+
 use num_traits::{Float, FromPrimitive};
 
 use crate::{
@@ -65,13 +68,26 @@ where
         return Ok(outcome);
     }
 
+    let anchor = direction
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.abs().partial_cmp(&b.abs()).unwrap())
+        .expect("a finite descent ray has a nonzero coordinate")
+        .0;
     let mut previous_step = T::zero();
     let mut previous_phi = f0;
     let mut previous_derivative = derphi0;
     let mut step = initial_step.min(step_max);
     let mut bracket: Option<ZoomBracket<T>> = None;
+    let mut last_negative_trial: Option<(T, T, T)> = None;
+    let mut last_positive_trial: Option<(T, T, T)> = None;
+    let mut last_negative_prediction: Option<(T, T)> = None;
+    let mut last_positive_prediction: Option<(T, T)> = None;
+    let mut local_prediction: Option<T> = None;
     let mut last_bracket_width = T::infinity();
     let mut older_bracket_width = T::infinity();
+    let mut last_low_derivative = T::infinity();
+    let mut older_low_derivative = T::infinity();
     for iteration in 0..options.max_line_search_steps {
         if outcome.evaluations >= evaluation_budget {
             outcome.evaluation_limit = true;
@@ -84,21 +100,47 @@ where
             // useful progress: it can repeatedly move the same endpoint while
             // the slope barely changes. Require contraction over two zoom
             // updates before allowing further interpolation at the same end.
-            let interpolated = b.trial_step();
-            let signed_width = b.high_step - b.low_step;
-            let clipped = interpolated == b.low_step + cast::<T>(0.1) * signed_width
-                || interpolated == b.low_step + cast::<T>(0.9) * signed_width;
-            step = if clipped && width >= cast::<T>(0.66) * older_bracket_width {
-                b.low_step / cast(2.) + b.high_step / cast(2.)
-            } else {
-                interpolated
-            };
+            step = b.safeguarded_trial_step(older_bracket_width, older_low_derivative);
+            if older_low_derivative.is_finite()
+                && b.low_derivative.abs() >= cast::<T>(0.66) * older_low_derivative
+                && let Some(local) = local_prediction
+                && local > b.low_step.min(b.high_step)
+                && local < b.low_step.max(b.high_step)
+            {
+                step = local;
+            }
             older_bracket_width = last_bracket_width;
             last_bracket_width = width;
+            older_low_derivative = last_low_derivative;
+            last_low_derivative = b.low_derivative.abs();
             // Adjacent representable endpoints: never accept an unchecked "best" trial.
             if step == b.low_step || step == b.high_step {
                 outcome.failure = Some(LineSearchFailure::NumericalStagnation);
                 return Ok(outcome);
+            }
+        }
+        if let Some(b) = &bracket {
+            // An interpolation parameter can be distinct from both endpoints
+            // while its rounded point is still x0. Probe farther along the same
+            // ray before spending a callback; this is not a stagnating bracket.
+            let upper = b.low_step.max(b.high_step);
+            while x0
+                .iter()
+                .zip(direction)
+                .zip(bounds)
+                .all(|((&x, &d), bound)| bound.project(x + step * d) == x)
+            {
+                let doubled = step + step;
+                let next = if doubled.is_finite() && doubled < upper {
+                    doubled
+                } else {
+                    step / cast(2.) + upper / cast(2.)
+                };
+                if next == step || next == upper {
+                    outcome.failure = Some(LineSearchFailure::NumericalStagnation);
+                    return Ok(outcome);
+                }
+                step = next;
             }
         }
         let eval = evaluate(x0, direction, step, bounds, fg)?;
@@ -109,6 +151,25 @@ where
         }
         let derphi = dot(&eval.g, direction);
         let armijo = eval.f <= f0 + options.wolfe_c1 * step * derphi0;
+        let effective_step = (eval.x[anchor] - x0[anchor]) / direction[anchor];
+        let (history, prediction_history) = if derphi > T::zero() {
+            (&mut last_positive_trial, &mut last_positive_prediction)
+        } else {
+            (&mut last_negative_trial, &mut last_negative_prediction)
+        };
+        let prediction = history
+            .and_then(|(a, f, g)| quadratic_stationary(a, f, g, effective_step, eval.f, derphi));
+        local_prediction = match (prediction, *prediction_history) {
+            (Some((root, error)), Some((older_root, older_error)))
+                if (error + older_error).is_finite()
+                    && (root - older_root).abs() <= error + older_error =>
+            {
+                Some(root)
+            }
+            _ => None,
+        };
+        *prediction_history = prediction;
+        *history = Some((effective_step, eval.f, derphi));
         // Test both Wolfe conditions before deciding how to tighten a bracket.
         // Near a nonzero minimum, a valid decrease can round to the same value.
         // A constrained minimum may still have a negative directional derivative.
@@ -235,6 +296,66 @@ fn quadratic_extrapolation<T: Float + FromPrimitive>(
     (predicted.is_finite() && predicted > step).then_some(predicted)
 }
 
+// Rejected trials on one side of the stationary point may share a quadratic
+// segment even when the bracket crosses an activation wall. Check the integral
+// of the measured slopes, including resolved function-value roundoff. The caller
+// also requires overlapping root-error estimates from three same-side samples.
+// This predicts a trial only: neither acceptance nor a stopping rule changes.
+fn quadratic_stationary<T: Float + FromPrimitive>(
+    previous_step: T,
+    previous_phi: T,
+    previous_derivative: T,
+    step: T,
+    phi: T,
+    derivative: T,
+) -> Option<(T, T)> {
+    let width = step - previous_step;
+    let change = derivative - previous_derivative;
+    let derivative_scale = previous_derivative.abs().max(derivative.abs());
+    if !change.is_finite()
+        || change.abs() <= cast::<T>(32.) * T::epsilon() * derivative_scale
+        || width == T::zero()
+        || (change > T::zero()) != (width > T::zero())
+    {
+        return None;
+    }
+    let actual = phi - previous_phi;
+    let previous_linear = previous_derivative * width;
+    let current_linear = derivative * width;
+    let expected = previous_linear / cast(2.) + current_linear / cast(2.);
+    let scale = actual
+        .abs()
+        .max(previous_linear.abs())
+        .max(current_linear.abs());
+    let value_roundoff = cast::<T>(4.) * T::epsilon() * phi.abs().max(previous_phi.abs());
+    if !value_roundoff.is_finite()
+        || value_roundoff > T::epsilon().sqrt() * scale
+        || !actual.is_finite()
+        || !expected.is_finite()
+        || !scale.is_finite()
+        || (actual - expected).abs() > cast::<T>(8.) * T::epsilon() * scale + value_roundoff
+    {
+        return None;
+    }
+    let predicted = if previous_derivative.abs() < derivative.abs() {
+        previous_step - (previous_derivative / change) * width
+    } else {
+        step - (derivative / change) * width
+    };
+    let anchor = if previous_derivative.abs() < derivative.abs() {
+        previous_step
+    } else {
+        step
+    };
+    let relative_error = cast::<T>(64.)
+        * T::epsilon()
+        * (derivative_scale / change.abs())
+        * (T::one()
+            + cast::<T>(2.) * (previous_derivative.abs().min(derivative.abs()) / change.abs()));
+    let error = cast::<T>(64.) * T::epsilon() * anchor.abs() + relative_error * width.abs();
+    (predicted.is_finite() && error.is_finite()).then_some((predicted, error))
+}
+
 struct ZoomBracket<T> {
     low_step: T,
     low_phi: T,
@@ -245,6 +366,29 @@ struct ZoomBracket<T> {
 }
 
 impl<T: Float + FromPrimitive> ZoomBracket<T> {
+    fn safeguarded_trial_step(&self, older_bracket_width: T, older_low_derivative: T) -> T {
+        let width = (self.high_step - self.low_step).abs();
+        let interpolated = self.trial_step();
+        let signed_width = self.high_step - self.low_step;
+        let clipped = interpolated == self.low_step + cast::<T>(0.1) * signed_width
+            || interpolated == self.low_step + cast::<T>(0.9) * signed_width;
+        // Model agreement is approximate, especially in f32. It must not
+        // exempt an endpoint-hugging secant forever. Preserve accurate
+        // narrow-quadratic trials while their slopes materially improve;
+        // otherwise demand the same two-update interval contraction.
+        let near_endpoint = (interpolated - self.low_step)
+            .abs()
+            .min((interpolated - self.high_step).abs())
+            < cast::<T>(0.1) * width;
+        let stalled_slope =
+            near_endpoint && self.low_derivative.abs() >= cast::<T>(0.66) * older_low_derivative;
+        if (clipped || stalled_slope) && width >= cast::<T>(0.66) * older_bracket_width {
+            self.low_step / cast(2.) + self.high_step / cast(2.)
+        } else {
+            interpolated
+        }
+    }
+
     fn trial_step(&self) -> T {
         let width = self.high_step - self.low_step;
         let opposite_slopes = (self.low_derivative < T::zero()
@@ -298,6 +442,15 @@ impl<T: Float + FromPrimitive> ZoomBracket<T> {
         };
         // Guarantee bracket contraction, without the slow 1/2 reduction on
         // narrow quadratics. This also works when low_step > high_step.
+        // A heavily clipped quadratic can repeatedly miss a narrow activation
+        // region. Use both endpoint slopes in a safeguarded cubic proposal.
+        // Ordinary interior and independently verified tiny-root predictions
+        // above retain their original behavior. This never accepts a trial.
+        if (fraction < cast::<T>(0.1) || fraction > cast::<T>(0.9))
+            && let Some(cubic) = cubic::zoom(self)
+        {
+            return cubic;
+        }
         let fraction = fraction.max(cast(0.1)).min(cast(0.9));
         let trial = self.low_step + fraction * width;
         if trial.is_finite()
@@ -377,8 +530,45 @@ where
 }
 #[cfg(test)]
 mod tests {
-    use super::{ZoomBracket, quadratic_extrapolation, strong_wolfe};
+    use super::{ZoomBracket, quadratic_extrapolation, quadratic_stationary, strong_wolfe};
     use crate::{Bound, Options};
+
+    #[test]
+    fn local_curvature_requires_resolved_function_values_and_positive_curvature() {
+        assert!(quadratic_stationary(0_f64, 1e24, -2., 1., 1e24, -1.).is_none());
+        assert!(quadratic_stationary(0_f64, 0., -1., 1., -1.5, -2.).is_none());
+        assert!(quadratic_stationary(0_f64, 0., -1., 1., -1., -1.).is_none());
+    }
+
+    #[test]
+    fn local_curvature_uses_either_step_order_and_avoids_underflow_in_ratios() {
+        for reverse in [false, true] {
+            // Width/change would underflow in f32, although derivative/change
+            // and the stationary point are representable.
+            let a = 1e-12_f32;
+            let b = 2e-12_f32;
+            let h = 1e26_f32;
+            let point = |x: f32| {
+                let d = (x - 0.5e-12) * 1e12;
+                (h * d * d / 2., h * d * 1e12)
+            };
+            let (fa, ga) = point(a);
+            let (fb, gb) = point(b);
+            assert_eq!(
+                (b - a) / (gb - ga),
+                0.,
+                "the old intermediate really underflows"
+            );
+            let fit = if reverse {
+                quadratic_stationary(b, fb, gb, a, fa, ga)
+            } else {
+                quadratic_stationary(a, fa, ga, b, fb, gb)
+            };
+            let (root, error) = fit.expect("resolved quadratic");
+            assert!((root - 0.5e-12).abs() <= error);
+            assert!((root - 0.5e-12).abs() < 1e-18);
+        }
+    }
 
     #[test]
     fn plateau_secant_preserves_tiny_steps_and_endpoint_order() {
@@ -488,6 +678,58 @@ mod tests {
         assert!(quadratic_extrapolation(0., 0., -1., 1., -1., -1.).is_none());
         assert!(quadratic_extrapolation(0., 0., -1., 1., 0., -0.5).is_none());
         assert!(quadratic_extrapolation(0., 0., -1., 1., -2., -2.).is_none());
+    }
+
+    #[test]
+    fn slope_progress_guard_preserves_ordinary_interior_interpolation() {
+        for reversed in [false, true] {
+            let bracket = ZoomBracket {
+                low_step: if reversed { 0_f64 } else { 1. },
+                high_step: if reversed { 1. } else { 0. },
+                low_phi: -1.,
+                high_phi: 0.,
+                low_derivative: if reversed { -2. } else { 2. },
+                high_derivative: if reversed { 1. } else { -1. },
+            };
+            let ordinary = bracket.trial_step();
+            assert!(ordinary > 0.1 && ordinary < 0.9);
+            assert!((ordinary - 0.5).abs() > 0.1);
+            assert_eq!(bracket.safeguarded_trial_step(1., 2.), ordinary);
+        }
+    }
+
+    #[test]
+    fn approximate_model_agreement_cannot_disable_zoom_progress_f32() {
+        let scale = 2_f32.powi(80);
+        let mut fg = |x: &[f32], g: &mut [f32]| {
+            let d = x[0] + 0.625;
+            let a = (-0.25 * d).max(0.);
+            g[0] = scale * (d / 32. - 64. * a);
+            Ok(scale * (d * d / 64. + 128. * a * a))
+        };
+        let x0 = [-0.6229999];
+        let mut g0 = [0.];
+        let f0 = fg(&x0, &mut g0).unwrap();
+        let opts = Options::default();
+        let result = strong_wolfe(
+            &x0,
+            f0,
+            &g0,
+            &[-1.],
+            &[Bound::unbounded()],
+            &opts,
+            20,
+            1.,
+            &mut fg,
+        )
+        .unwrap();
+        let step = result
+            .step
+            .expect("approximately agreeing models must not crawl along one endpoint");
+        let displacement = x0[0] - step.x[0];
+        assert!(step.f <= f0 - opts.wolfe_c1 * displacement * g0[0]);
+        assert!(step.g[0].abs() <= opts.wolfe_c2 * g0[0].abs());
+        assert!(result.evaluations <= 20);
     }
 
     #[test]

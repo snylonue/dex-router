@@ -74,11 +74,18 @@ impl<T: Float> LbfgsMemory<T> {
         if self.capacity == 0 {
             return false;
         }
+        let theta = yy / ys;
+        // Finite positive curvature alone does not guarantee a representable
+        // diagonal: yy can underflow, or yy/ys can overflow. Reject before
+        // evicting history or invalidating its caches.
+        if !theta.is_finite() || theta <= T::zero() {
+            return false;
+        }
         if self.pairs.len() == self.capacity {
             self.pairs.remove(0);
         }
         self.pairs.push(Correction { s, y, ys });
-        self.theta = yy / ys;
+        self.theta = theta;
         // Even without eviction, a new theta changes every B_i s_i. Appending
         // just one cached update would leave the old prefixes inconsistent.
         self.hessian_cache.take();

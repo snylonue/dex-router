@@ -1,5 +1,7 @@
 # L-BFGS-B regression tests
 
+> 后续更新：见[同精度 C 性能对照](<dexrouter-lbfgsb/OPTIMIZER_PARITY.md>)。以下旧计数和未解决状态保留为历史快照；当前三点一致性插值已修复字面20/80复现，且两条用户路径各5/5通过原始DD数值门槛（不是交易准入）。
+
 ## Provenance and adaptation
 
 The SciPy cases are adapted from **SciPy v1.15.2**, not from an unpinned branch:
@@ -87,6 +89,17 @@ truncation, for upper/lower bounds and both inverse-recursion and CG paths.
    increases, rather than clipping Newton coordinates independently.
 10. Use safeguarded interpolation in zoom so narrow quadratics do not exhaust
     the default trial budget solely because of repeated bisection.
+
+## Frozen user-problem followup
+
+[The user-problem diagnosis](<dexrouter-lbfgsb/USER_PROBLEM_DIAGNOSIS.md>) keeps the original acceptance gate alongside generic fuzzing. New internal tests prevent normalization of an already usable ordinary fallback, preserve ordinary interior zoom interpolation in both bracket orientations, and retain stationary/large-ray safeguards. Raw TrialLimit above pgtol remains explicitly unresolved; original DD success is not an optimizer KKT certificate.
+
+## Structured convex fuzzing
+
+[Property-fuzzing guide](<dexrouter-lbfgsb/FUZZING.md>) documents the generated
+convex family, independent KKT/solution oracles, automatic shrinking, persisted
+seeds, default CI cases and opt-in extreme/KKT-discovery campaigns. This is
+proptest-based numerical fuzzing, not a claim of libFuzzer coverage guidance.
 
 ## Reproduce
 

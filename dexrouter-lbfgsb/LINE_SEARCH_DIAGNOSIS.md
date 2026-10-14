@@ -1,5 +1,9 @@
 # 优化器内核：尺度悬殊与分段曲率下的线搜索修复
 
+> Historical snapshot: see the [matched-quality C parity followup](<dexrouter-lbfgsb/OPTIMIZER_PARITY.md>) for the later clipped-cubic / three-sample rescue, unchanged acceptance rules, and current measured results.
+
+> 本文保留至 ac1ee4f 的历史测量。随后 fuzz 保护使原用户路径回归，已在[用户问题 followup](<dexrouter-lbfgsb/USER_PROBLEM_DIAGNOSIS.md>)通过组合收窄恢复；最新 raw 则明确记录为 TrialLimit，不能沿用本文历史末行指标描述当前内核。
+
 范围：只修 dexrouter-lbfgsb 的通用 f/g 线搜索，不修改路由目标、用户的 DD 精化、容差或 warm 交接策略，不增加 C/BLAS 依赖。首轮基线为 ea10f08ef7398758a515569d97f6d77cf2c39668，第 7 节起基于 d382177 继续修复。
 
 ## 1. 已复现的两个内核缺陷

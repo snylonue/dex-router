@@ -147,12 +147,17 @@ where
 
         let direction =
             reduced_search_direction(&x, &gradient, &variables, &variable_bounds, &memory);
-        let mut direction = if descent_derivative(&gradient, &direction) < T::zero() {
+        let mut direction = if is_descent_direction(&gradient, &direction) {
             direction
         } else {
             memory.clear();
-            projected_steepest_direction(&x, &gradient, &bounds)
+            let mut fallback = projected_steepest_direction(&x, &gradient, &bounds);
+            safeguard_steepest_direction(&x, &gradient, &bounds, &mut fallback);
+            fallback
         };
+
+        let normalize_model = memory.is_empty() && norm_inf(&direction) < T::epsilon().sqrt();
+        safeguard_direction(&mut direction, &gradient, normalize_model);
 
         if norm_inf(&direction) == T::zero() {
             projected_gradient_inf_norm = norm_inf(&projected_gradient(&x, &gradient, &bounds));
@@ -168,10 +173,11 @@ where
             });
         }
 
-        if descent_derivative(&gradient, &direction) >= T::zero() {
+        if !is_descent_direction(&gradient, &direction) {
             direction = projected_steepest_direction(&x, &gradient, &bounds);
+            safeguard_steepest_direction(&x, &gradient, &bounds, &mut direction);
         }
-        if descent_derivative(&gradient, &direction) >= T::zero() {
+        if !is_descent_direction(&gradient, &direction) {
             projected_gradient_inf_norm = norm_inf(&projected_gradient(&x, &gradient, &bounds));
             return Ok(OptimizeResult {
                 x,
@@ -187,7 +193,7 @@ where
 
         // As in the classic solver, keep the first displacement bounded when
         // there are unbounded coordinates and no curvature scale is known yet.
-        let initial_step = if iteration == 0
+        let initial_step = if memory.is_empty()
             && bounds
                 .iter()
                 .any(|b| b.lower.is_none() || b.upper.is_none())
@@ -212,7 +218,8 @@ where
         // repeating the same steepest search only wastes the evaluation budget.
         if search.step.is_none() && !search.evaluation_limit && !memory.is_empty() {
             memory.clear();
-            let fallback = projected_steepest_direction(&x, &gradient, &bounds);
+            let mut fallback = projected_steepest_direction(&x, &gradient, &bounds);
+            safeguard_steepest_direction(&x, &gradient, &bounds, &mut fallback);
             search = strong_wolfe(
                 &x,
                 f,
@@ -366,12 +373,58 @@ fn search_direction<T: Float>(
     if norm_inf(&direction) > T::zero() {
         direction
     } else {
-        projected_steepest_direction(x, gradient, bounds)
+        let mut fallback = projected_steepest_direction(x, gradient, bounds);
+        safeguard_steepest_direction(x, gradient, bounds, &mut fallback);
+        fallback
     }
 }
 
-fn descent_derivative<T: Float>(gradient: &[T], direction: &[T]) -> T {
-    dot(gradient, direction)
+// Keep an already usable steepest ray at its natural scale. Unit normalization
+// is needed for a stationary first point or an excessive restart displacement,
+// not for every ordinary fallback: changing that scale also changes which
+// probes fit into the finite line-search budget.
+fn safeguard_steepest_direction<T: Float>(
+    x: &[T],
+    gradient: &[T],
+    bounds: &[Bound<T>],
+    direction: &mut [T],
+) {
+    let normalize = norm_inf(direction) > T::one()
+        || x.iter()
+            .zip(direction.iter())
+            .zip(bounds)
+            .all(|((&x, &d), bound)| bound.project(x + d) == x);
+    safeguard_direction(direction, gradient, normalize);
+}
+
+fn is_descent_direction<T: Float>(gradient: &[T], direction: &[T]) -> bool {
+    let derivative = dot(gradient, direction);
+    derivative.is_finite() && derivative < T::zero()
+}
+
+// Positive rescaling changes the line parameter, not the search ray. Without a
+// curvature model, do not let a tiny gradient determine an unrepresentable first
+// displacement. Division by the norm (not multiplication by its reciprocal)
+// also works when that reciprocal would overflow. Every trial still needs the
+// original feasibility and Wolfe checks.
+fn safeguard_direction<T: Float>(direction: &mut [T], gradient: &[T], normalize: bool) {
+    let norm = norm_inf(direction);
+    if norm.is_finite()
+        && norm > T::zero()
+        && (normalize || !is_descent_direction(gradient, direction))
+    {
+        for d in direction.iter_mut() {
+            *d = *d / norm;
+        }
+        // A sum of finite g_i*d_i can still overflow after unit normalization.
+        // This path has a steepest direction, so all nonzero terms are negative.
+        let two = T::one() + T::one();
+        while dot(gradient, direction) == T::neg_infinity() {
+            for d in direction.iter_mut() {
+                *d = *d / two;
+            }
+        }
+    }
 }
 
 fn accept_step<T: Float>(
@@ -421,11 +474,39 @@ mod tests {
     }
 
     #[test]
-    fn invalid_model_scale_does_not_take_feasible_newton_shortcut() {
+    fn steepest_fallback_still_safeguards_stationary_and_large_rays() {
         let mut memory = LbfgsMemory::new(1);
-        assert!(memory.push(vec![1e-300_f64], vec![1e50]));
-        assert!(!memory.theta().is_finite());
-        search_direction(&[1e-300], &[1e50], &[Bound::both(-1., 1.)], &memory);
+        assert!(memory.push(vec![1e-100_f64], vec![1.]));
+        for gradient in [1e-100, 1e20] {
+            let direction = search_direction(&[1.], &[gradient], &[Bound::unbounded()], &memory);
+            assert_eq!(direction, [-1.]);
+            assert!(is_descent_direction(&[gradient], &direction));
+        }
+    }
+
+    #[test]
+    fn usable_steepest_fallback_preserves_its_scale() {
+        let mut memory = LbfgsMemory::new(1);
+        assert!(memory.push(vec![1e-100_f64], vec![1.]));
+        for gradient in [0.25, 1e-4] {
+            for bound in [Bound::unbounded(), Bound::both(-2., 2.)] {
+                // The model displacement rounds away, but the raw steepest
+                // displacement is already finite, descending and representable.
+                let direction = search_direction(&[1.], &[gradient], &[bound], &memory);
+                assert_eq!(direction, [-gradient]);
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_model_scale_is_rejected_before_search() {
+        let mut memory = LbfgsMemory::new(1);
+        assert!(!memory.push(vec![1e-300_f64], vec![1e50]));
+        assert_eq!(memory.theta(), 1.);
+        assert!(memory.is_empty());
+        assert!(!memory.hessian_cache_is_initialized());
+        let direction = search_direction(&[1e-300], &[1e50], &[Bound::both(-1., 1.)], &memory);
+        assert_eq!(direction, [-1.]);
         assert!(memory.hessian_cache_is_initialized());
     }
 

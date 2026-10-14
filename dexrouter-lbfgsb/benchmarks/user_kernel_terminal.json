@@ -1,0 +1,620 @@
+{
+  "method": "Sequential binary64 recomputation of slopes, original Wolfe tests and rounded feasible points; Decimal objective changes in ulps",
+  "scope": "Observation only, no extra callback calls, no accepted or rejected point replaced",
+  "same_warm_counts_prices_and_final_DD_quotes_as_unobserved": true,
+  "observer_binary_sha256": "1f4e7760727053b0b55f99c139f41fb196fac687fcc83a3e5fc07b22fb9e24de",
+  "terminal": {
+    "iteration": 41033,
+    "evaluations": 82168,
+    "reason": "Some(TrialLimit)"
+  },
+  "remaining_issue": "Two 20-trial searches exhaust the unchanged budget. This alone proves neither that a better trial policy is impossible nor that a larger budget is the correct production fix.",
+  "searches": [
+    {
+      "f0": 3.442143477195939,
+      "derivative0": -1.2736803723251325e-07,
+      "direction_inf_norm": 1.384326762898791e-05,
+      "initial_step": 1.0,
+      "trials": [
+        {
+          "step": 1.0,
+          "objective_change_ulps": 6109266837.0,
+          "predicted_change_ulps": -286807322.5096291,
+          "derivative_ratio": 24.44420905258851,
+          "armijo": false,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": null
+        },
+        {
+          "step": 0.1,
+          "objective_change_ulps": 255800953.0,
+          "predicted_change_ulps": -28680732.25096291,
+          "derivative_ratio": 21.392537091718392,
+          "armijo": false,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0,
+            1.0,
+            -1.2736803723251325e-07,
+            3.1134109287294304e-06
+          ]
+        },
+        {
+          "step": 0.010000000000000002,
+          "objective_change_ulps": -2858337.0,
+          "predicted_change_ulps": -2868073.2250962914,
+          "derivative_ratio": -0.9932107416502671,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 189,
+          "bracket": [
+            0.0,
+            0.1,
+            -1.2736803723251325e-07,
+            2.724725460795909e-06
+          ]
+        },
+        {
+          "step": 0.019000000000000003,
+          "objective_change_ulps": -5414193.0,
+          "predicted_change_ulps": -5449339.127682953,
+          "derivative_ratio": -0.9871004097638726,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 190,
+          "bracket": [
+            0.010000000000000002,
+            0.1,
+            -1.2650330272224333e-07,
+            2.724725460795909e-06
+          ]
+        },
+        {
+          "step": 0.059500000000000004,
+          "objective_change_ulps": 7471431.0,
+          "predicted_change_ulps": -17065035.68932293,
+          "derivative_ratio": 21.36504061693068,
+          "armijo": false,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.019000000000000003,
+            0.1,
+            -1.2572504174303402e-07,
+            2.724725460795909e-06
+          ]
+        },
+        {
+          "step": 0.028534681850355507,
+          "objective_change_ulps": -8104685.0,
+          "predicted_change_ulps": -8183955.700164571,
+          "derivative_ratio": -0.9806270691957424,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.019000000000000003,
+            0.059500000000000004,
+            -1.2572504174303402e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.034087002472651624,
+          "objective_change_ulps": -9663278.0,
+          "predicted_change_ulps": -9776401.911560318,
+          "derivative_ratio": -0.9768574563318998,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.028534681850355507,
+            0.059500000000000004,
+            -1.2490054506053366e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.03781699480097309,
+          "objective_change_ulps": -10706954.0,
+          "predicted_change_ulps": -10846191.024227656,
+          "derivative_ratio": -0.9743250689934357,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.034087002472651624,
+            0.059500000000000004,
+            -1.244204168689396e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.04052727470280442,
+          "objective_change_ulps": -11463609.0,
+          "predicted_change_ulps": -11623519.146123558,
+          "derivative_ratio": -0.9724849906086385,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.03781699480097309,
+            0.059500000000000004,
+            -1.2409787166412697e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.04259935191893473,
+          "objective_change_ulps": -12041130.0,
+          "predicted_change_ulps": -12217806.064515099,
+          "derivative_ratio": -0.9710782043990772,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.04052727470280442,
+            0.059500000000000004,
+            -1.2386350449190136e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.05104967595946737,
+          "objective_change_ulps": -14387693.0,
+          "predicted_change_ulps": -14641420.876919016,
+          "derivative_ratio": -0.9653410636131404,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.04259935191893473,
+            0.059500000000000004,
+            -1.2368432489358378e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.051894708363520635,
+          "objective_change_ulps": -14621587.0,
+          "predicted_change_ulps": -14883782.358159408,
+          "derivative_ratio": -0.9647673495541389,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.05104967595946737,
+            0.059500000000000004,
+            -1.2295359653235242e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.05265523752716857,
+          "objective_change_ulps": -14831971.0,
+          "predicted_change_ulps": -15101907.69127576,
+          "derivative_ratio": -0.9642510069046093,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.051894708363520635,
+            0.059500000000000004,
+            -1.228805236987247e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.05607761876358429,
+          "objective_change_ulps": -13383569.0,
+          "predicted_change_ulps": -16083471.690299345,
+          "derivative_ratio": 17.348967908223738,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.05265523752716857,
+            0.059500000000000004,
+            -1.2281475814891467e-07,
+            2.721223288771385e-06
+          ]
+        },
+        {
+          "step": 0.053331513670975224,
+          "objective_change_ulps": -15018955.0,
+          "predicted_change_ulps": -15295868.641358083,
+          "derivative_ratio": -0.963791865797072,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.05265523752716857,
+            0.05607761876358429,
+            -1.2281475814891467e-07,
+            2.2097039904803186e-06
+          ]
+        },
+        {
+          "step": 0.05376679310368406,
+          "objective_change_ulps": -15139255.0,
+          "predicted_change_ulps": -15420709.969996816,
+          "derivative_ratio": -0.9634963434899844,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.053331513670975224,
+            0.05607761876358429,
+            -1.2275627824723488e-07,
+            2.2097039904803186e-06
+          ]
+        },
+        {
+          "step": 0.054074951752949324,
+          "objective_change_ulps": -15224402.0,
+          "predicted_change_ulps": -15509092.12710077,
+          "derivative_ratio": -0.9632871267369832,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.05376679310368406,
+            0.05607761876358429,
+            -1.227186381510227e-07,
+            2.2097039904803186e-06
+          ]
+        },
+        {
+          "step": 0.05430636412944963,
+          "objective_change_ulps": -15288334.0,
+          "predicted_change_ulps": -15575462.89120041,
+          "derivative_ratio": -0.9631300149746134,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.054074951752949324,
+            0.05607761876358429,
+            -1.226919906238368e-07,
+            2.2097039904803186e-06
+          ]
+        },
+        {
+          "step": 0.0544873626873101,
+          "objective_change_ulps": -15338325.0,
+          "predicted_change_ulps": -15627374.602958478,
+          "derivative_ratio": -0.9630071304398534,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.05430636412944963,
+            0.05607761876358429,
+            -1.226719796070376e-07,
+            2.2097039904803186e-06
+          ]
+        },
+        {
+          "step": 0.05528249072544719,
+          "objective_change_ulps": -15518797.0,
+          "predicted_change_ulps": -15855423.14662891,
+          "derivative_ratio": 1.3771326577898673,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0544873626873101,
+            0.05607761876358429,
+            -1.22656328045039e-07,
+            2.2097039904803186e-06
+          ]
+        }
+      ]
+    },
+    {
+      "f0": 3.442143477195939,
+      "derivative0": -1.940257970038765e-05,
+      "direction_inf_norm": 0.0026488715736448358,
+      "initial_step": 1.0,
+      "trials": [
+        {
+          "step": 1.0,
+          "objective_change_ulps": 389488194474835.0,
+          "predicted_change_ulps": -43690725354.346085,
+          "derivative_ratio": 15327.553031273754,
+          "armijo": false,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": null
+        },
+        {
+          "step": 0.1,
+          "objective_change_ulps": 3372277721049.0,
+          "predicted_change_ulps": -4369072535.434608,
+          "derivative_ratio": 1840.2966904448176,
+          "armijo": false,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0,
+            1.0,
+            -1.940257970038765e-05,
+            0.2973940693012073
+          ]
+        },
+        {
+          "step": 0.010000000000000002,
+          "objective_change_ulps": 22578443741.0,
+          "predicted_change_ulps": -436907253.5434609,
+          "derivative_ratio": 90.08987247516302,
+          "armijo": false,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0,
+            0.1,
+            -1.940257970038765e-05,
+            0.03570650320871519
+          ]
+        },
+        {
+          "step": 0.0010000000000000002,
+          "objective_change_ulps": 489766864.0,
+          "predicted_change_ulps": -43690725.3543461,
+          "derivative_ratio": 22.280079846481986,
+          "armijo": false,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0,
+            0.010000000000000002,
+            -1.940257970038765e-05,
+            0.00174797593089711
+          ]
+        },
+        {
+          "step": 0.00010000000000000003,
+          "objective_change_ulps": -4355495.0,
+          "predicted_change_ulps": -4369072.53543461,
+          "derivative_ratio": -0.9937831730954858,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 189,
+          "bracket": [
+            0.0,
+            0.0010000000000000002,
+            -1.940257970038765e-05,
+            0.0004322910249523674
+          ]
+        },
+        {
+          "step": 0.00019000000000000006,
+          "objective_change_ulps": -8252214.0,
+          "predicted_change_ulps": -8301237.817325759,
+          "derivative_ratio": -0.988188023846099,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 190,
+          "bracket": [
+            0.00010000000000000003,
+            0.0010000000000000002,
+            -1.9281957220889298e-05,
+            0.0004322910249523674
+          ]
+        },
+        {
+          "step": 0.0005950000000000002,
+          "objective_change_ulps": 122497736.0,
+          "predicted_change_ulps": -25995981.585835926,
+          "derivative_ratio": 19.23162736283081,
+          "armijo": false,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.00019000000000000006,
+            0.0010000000000000002,
+            -1.9173396891642507e-05,
+            0.0004322910249523674
+          ]
+        },
+        {
+          "step": 0.00023050000000000007,
+          "objective_change_ulps": -9998559.0,
+          "predicted_change_ulps": -10070712.194176776,
+          "derivative_ratio": -0.9856702051385461,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 190,
+          "bracket": [
+            0.00019000000000000006,
+            0.0005950000000000002,
+            -1.9173396891642507e-05,
+            0.00037314318267548074
+          ]
+        },
+        {
+          "step": 0.00026695000000000006,
+          "objective_change_ulps": -11566461.0,
+          "predicted_change_ulps": -11663239.13334269,
+          "derivative_ratio": -0.9834041674762333,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 190,
+          "bracket": [
+            0.00023050000000000007,
+            0.0005950000000000002,
+            -1.9124544713498085e-05,
+            0.00037314318267548074
+          ]
+        },
+        {
+          "step": 0.0004309750000000001,
+          "objective_change_ulps": -11288591.0,
+          "predicted_change_ulps": -18829610.35958931,
+          "derivative_ratio": 18.361650871265788,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.00026695000000000006,
+            0.0005950000000000002,
+            -1.908057773715098e-05,
+            0.00037314318267548074
+          ]
+        },
+        {
+          "step": 0.0003458515305719924,
+          "objective_change_ulps": -14948061.0,
+          "predicted_change_ulps": -15110504.23560115,
+          "derivative_ratio": -0.9784989840166355,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 190,
+          "bracket": [
+            0.00026695000000000006,
+            0.0004309750000000001,
+            -1.908057773715098e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.0003670731254562571,
+          "objective_change_ulps": -15854699.0,
+          "predicted_change_ulps": -16037691.109270751,
+          "derivative_ratio": -0.9771796703756399,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 190,
+          "bracket": [
+            0.0003458515305719924,
+            0.0004309750000000001,
+            -1.898540452413111e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.00037902335866887903,
+          "objective_change_ulps": -16364707.0,
+          "predicted_change_ulps": -16559805.466483803,
+          "derivative_ratio": -0.9764367427986204,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0003670731254562571,
+            0.0004309750000000001,
+            -1.8959806436061886e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.0003869179424635609,
+          "objective_change_ulps": -16701413.0,
+          "predicted_change_ulps": -16904725.55884412,
+          "derivative_ratio": -0.975945948644442,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.00037902335866887903,
+            0.0004309750000000001,
+            -1.894539172453715e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.0003925934505734373,
+          "objective_change_ulps": -16943372.0,
+          "predicted_change_ulps": -17152692.624919094,
+          "derivative_ratio": -0.9755931109933407,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0003869179424635609,
+            0.0004309750000000001,
+            -1.8935869051844218e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.0003968997038405288,
+          "objective_change_ulps": -17126899.0,
+          "predicted_change_ulps": -17340835.953717843,
+          "derivative_ratio": -0.9753253978186891,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0003925934505734373,
+            0.0004309750000000001,
+            -1.8929023091197426e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.0004139373519202645,
+          "objective_change_ulps": -17852523.0,
+          "predicted_change_ulps": -18085223.15665358,
+          "derivative_ratio": -0.9742661931669065,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0003968997038405288,
+            0.0004309750000000001,
+            -1.8923828764989407e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.00041564111672823804,
+          "objective_change_ulps": -17925044.0,
+          "predicted_change_ulps": -18159661.87694715,
+          "derivative_ratio": -0.9741602726979705,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.0004139373519202645,
+            0.0004309750000000001,
+            -1.8903277462314174e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.00041717450505541424,
+          "objective_change_ulps": -17990304.0,
+          "predicted_change_ulps": -18226656.725211367,
+          "derivative_ratio": -0.9740649442684243,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.00041564111672823804,
+            0.0004309750000000001,
+            -1.8901222331973738e-05,
+            0.0003562633944604268
+          ]
+        },
+        {
+          "step": 0.0004240747525277072,
+          "objective_change_ulps": -16514758.0,
+          "predicted_change_ulps": -18528133.542400338,
+          "derivative_ratio": 12.659917563923946,
+          "armijo": true,
+          "curvature": false,
+          "changed_coordinates": 191,
+          "bracket": [
+            0.00041717450505541424,
+            0.0004309750000000001,
+            -1.8899372714521755e-05,
+            0.0003562633944604268
+          ]
+        }
+      ]
+    }
+  ]
+}

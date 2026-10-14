@@ -160,6 +160,42 @@ fn lazy_cache_supports_concurrent_shared_products() {
     assert_eq!(memory.hessian_cache.get().unwrap().len(), 17);
 }
 
+fn invalid_theta_preserves_history<T: Float + FromPrimitive>(tiny_y: f64, tiny_s: f64) {
+    let c = |x| T::from_f64(x).unwrap();
+    for (s, y) in [(T::one(), c(tiny_y)), (c(tiny_s), T::one())] {
+        let mut memory = LbfgsMemory::new(1);
+        assert!(memory.push(vec![T::one()], vec![c(2.)]));
+        assert!(memory.hessian_product(&[T::one()]) == vec![c(2.)]);
+        assert!(memory.hessian_cache.get().is_some());
+        assert!(memory.solve_reduced(&[T::one()], &[0]).is_some());
+        assert!(memory.compact_cache.get().is_some());
+        assert!(
+            !memory.push(vec![s], vec![y]),
+            "a correction must not install zero/infinite theta"
+        );
+        assert!(memory.theta() == c(2.));
+        assert_eq!(memory.pairs.len(), 1);
+        assert!(
+            memory.hessian_cache.get().is_some(),
+            "rejection must not invalidate a valid cache"
+        );
+        assert!(
+            memory.compact_cache.get().is_some(),
+            "rejection must retain the compact cache"
+        );
+        assert!(memory.inverse_hessian_product(&[T::one()]) == vec![c(0.5)]);
+    }
+}
+
+#[test]
+fn invalid_diagonal_scale_is_rejected_f64() {
+    invalid_theta_preserves_history::<f64>(1e-200, 1e-310);
+}
+#[test]
+fn invalid_diagonal_scale_is_rejected_f32() {
+    invalid_theta_preserves_history::<f32>(1e-30, 1e-40);
+}
+
 #[test]
 #[ignore = "release-only Hessian cache microbenchmark against original implementation"]
 fn benchmark_repeated_hessian_products() {
