@@ -139,10 +139,28 @@ where
                     high_derivative: previous_derivative,
                 });
             } else {
+                let mut next = (step + step).min(step_max);
+                if let Some(predicted) = quadratic_extrapolation(
+                    previous_step,
+                    previous_phi,
+                    previous_derivative,
+                    step,
+                    eval.f,
+                    derphi,
+                ) {
+                    let predicted = predicted.min(step_max);
+                    if (!next.is_finite() || predicted > next)
+                        && x0
+                            .iter()
+                            .zip(direction)
+                            .all(|(&x, &d)| (x + predicted * d).is_finite())
+                    {
+                        next = predicted;
+                    }
+                }
                 previous_step = step;
                 previous_phi = eval.f;
                 previous_derivative = derphi;
-                let next = (step + step).min(step_max);
                 if !next.is_finite() || next == step {
                     outcome.failure = Some(LineSearchFailure::NumericalStagnation);
                     return Ok(outcome);
@@ -160,6 +178,46 @@ where
     Ok(outcome)
 }
 
+// A decreasing slope need not reach Wolfe curvature within twenty doublings.
+// Extrapolate only when curvature is resolved above roundoff and the measured
+// function change agrees with the integral of a linearly varying derivative.
+// This predicts a trial, never an acceptance; feasibility and Wolfe still apply.
+fn quadratic_extrapolation<T: Float + FromPrimitive>(
+    previous_step: T,
+    previous_phi: T,
+    previous_derivative: T,
+    step: T,
+    phi: T,
+    derivative: T,
+) -> Option<T> {
+    let width = step - previous_step;
+    let change = derivative - previous_derivative;
+    let derivative_scale = previous_derivative.abs().max(derivative.abs());
+    if !change.is_finite()
+        || change <= cast::<T>(32.) * T::epsilon() * derivative_scale
+        || width <= T::zero()
+    {
+        return None;
+    }
+    let actual = phi - previous_phi;
+    let previous_linear = previous_derivative * width;
+    let current_linear = derivative * width;
+    let expected = previous_linear / cast(2.) + current_linear / cast(2.);
+    let scale = actual
+        .abs()
+        .max(previous_linear.abs())
+        .max(current_linear.abs());
+    if !actual.is_finite()
+        || !expected.is_finite()
+        || !scale.is_finite()
+        || (actual - expected).abs() > cast::<T>(8.) * T::epsilon() * scale
+    {
+        return None;
+    }
+    let predicted = step - derivative * (width / change);
+    (predicted.is_finite() && predicted > step).then_some(predicted)
+}
+
 struct ZoomBracket<T> {
     low_step: T,
     low_phi: T,
@@ -175,11 +233,9 @@ impl<T: Float + FromPrimitive> ZoomBracket<T> {
         let opposite_slopes = (self.low_derivative < T::zero()
             && self.high_derivative >= T::zero())
             || (self.low_derivative > T::zero() && self.high_derivative <= T::zero());
-        // On an objective plateau, the function-value quadratic has no useful
-        // curvature information. Interpolate the opposite derivatives, anchored
-        // at the endpoint with the smaller slope to avoid rounding 1-t to 1.
-        // The next evaluation still has to satisfy the original Wolfe tests.
-        if self.high_phi == self.low_phi && opposite_slopes {
+        // Interpolate opposite derivatives at the endpoint with the smaller
+        // slope, avoiding cancellation in 1-t for a root very near an endpoint.
+        if opposite_slopes {
             let scale = self.low_derivative.abs().max(self.high_derivative.abs());
             if scale.is_finite() && scale > T::zero() {
                 let low = self.low_derivative.abs() / scale;
@@ -193,7 +249,19 @@ impl<T: Float + FromPrimitive> ZoomBracket<T> {
                     && trial > self.low_step.min(self.high_step)
                     && trial < self.low_step.max(self.high_step)
                 {
-                    return trial;
+                    // Equal rounded values contain no useful curvature. For
+                    // unequal values, only bypass the 10% safeguard when an
+                    // independently fitted function-value quadratic agrees.
+                    // Otherwise false-position steps can hug an endpoint.
+                    let near_endpoint = (trial - self.low_step)
+                        .abs()
+                        .min((trial - self.high_step).abs())
+                        < cast::<T>(0.1) * width.abs();
+                    if self.high_phi == self.low_phi
+                        || (near_endpoint && self.quadratic_agrees(trial))
+                    {
+                        return trial;
+                    }
                 }
             }
         }
@@ -223,6 +291,44 @@ impl<T: Float + FromPrimitive> ZoomBracket<T> {
         } else {
             self.low_step / (T::one() + T::one()) + self.high_step / (T::one() + T::one())
         }
+    }
+
+    fn quadratic_agrees(&self, derivative_trial: T) -> bool {
+        // Fit from the endpoint with the smaller derivative as well. Fitting
+        // from the distant endpoint can round a tiny displacement to zero.
+        let (anchor, phi, derivative, other, other_phi) =
+            if self.low_derivative.abs() <= self.high_derivative.abs() {
+                (
+                    self.low_step,
+                    self.low_phi,
+                    self.low_derivative,
+                    self.high_step,
+                    self.high_phi,
+                )
+            } else {
+                (
+                    self.high_step,
+                    self.high_phi,
+                    self.high_derivative,
+                    self.low_step,
+                    self.low_phi,
+                )
+            };
+        let width = other - anchor;
+        let slope = derivative * width;
+        let denominator = (T::one() + T::one()) * (other_phi - phi - slope);
+        let fraction = -slope / denominator;
+        let quadratic_trial = anchor + fraction * width;
+        let distance = (derivative_trial - anchor)
+            .abs()
+            .min((derivative_trial - other).abs());
+        denominator > T::zero()
+            && fraction.is_finite()
+            && fraction > T::zero()
+            && fraction < T::one()
+            && quadratic_trial.is_finite()
+            && (quadratic_trial - derivative_trial).abs()
+                <= cast::<T>(8.) * T::epsilon().sqrt() * distance
     }
 }
 
@@ -254,7 +360,7 @@ where
 }
 #[cfg(test)]
 mod tests {
-    use super::{ZoomBracket, strong_wolfe};
+    use super::{ZoomBracket, quadratic_extrapolation, strong_wolfe};
     use crate::{Bound, Options};
 
     #[test]
@@ -316,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn zoom_safeguards_narrow_quadratic_with_either_endpoint_order() {
+    fn zoom_preserves_model_agreed_narrow_quadratic_with_either_endpoint_order() {
         for (low, high) in [(0_f64, 1.), (1., 0.)] {
             let bracket = ZoomBracket {
                 low_step: low,
@@ -326,7 +432,67 @@ mod tests {
                 high_phi: (high - 1e-8).powi(2),
                 high_derivative: 2. * (high - 1e-8),
             };
-            assert!((bracket.trial_step() - 0.1).abs() < 1e-15);
+            assert!((bracket.trial_step() - 1e-8).abs() < 1e-15);
+        }
+    }
+
+    #[test]
+    fn extrapolation_requires_resolved_and_consistent_curvature() {
+        assert_eq!(
+            quadratic_extrapolation(0_f64, 0., -1., 1., -0.875, -0.75),
+            Some(4.)
+        );
+        // The change in slope is not resolved above the roundoff safeguard.
+        let eps = 1e-15_f64;
+        assert!(
+            quadratic_extrapolation(
+                0.,
+                0.,
+                eps - 1.,
+                1.,
+                eps * (1_f64.exp() - 1.) - 1.,
+                eps * 1_f64.exp() - 1.
+            )
+            .is_none()
+        );
+        // Observable but non-quadratic curvature must not trigger a huge jump.
+        let eps = 1e-6_f64;
+        assert!(
+            quadratic_extrapolation(
+                0.,
+                0.,
+                eps - 1.,
+                1.,
+                eps * (1_f64.exp() - 1.) - 1.,
+                eps * 1_f64.exp() - 1.
+            )
+            .is_none()
+        );
+        assert!(quadratic_extrapolation(0., 0., -1., 1., -1., -1.).is_none());
+        assert!(quadratic_extrapolation(0., 0., -1., 1., 0., -0.5).is_none());
+        assert!(quadratic_extrapolation(0., 0., -1., 1., -2., -2.).is_none());
+    }
+
+    #[test]
+    fn disagreeing_models_keep_the_endpoint_safeguard() {
+        for reversed in [false, true] {
+            // f(t) = 1e24*t^4/4 - t: derivative secant predicts 1e-24,
+            // the function-value quadratic predicts 2e-24, true root is 1e-8.
+            let mut bracket = ZoomBracket {
+                low_step: 0_f64,
+                low_phi: 0.,
+                low_derivative: -1.,
+                high_step: 1.,
+                high_phi: 0.25e24 - 1.,
+                high_derivative: 1e24 - 1.,
+            };
+            if reversed {
+                std::mem::swap(&mut bracket.low_step, &mut bracket.high_step);
+                std::mem::swap(&mut bracket.low_phi, &mut bracket.high_phi);
+                std::mem::swap(&mut bracket.low_derivative, &mut bracket.high_derivative);
+            }
+            let trial = bracket.trial_step();
+            assert!((0.1..=0.9).contains(&trial), "{trial}");
         }
     }
 

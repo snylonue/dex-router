@@ -1,0 +1,4700 @@
+{
+  "scope": "Pure-Rust optimizer search repair; DD acceptance is a separate integration check, not optimizer KKT convergence.",
+  "base_commit": "ea10f08ef7398758a515569d97f6d77cf2c39668",
+  "final_source_sha256": "71e733948a73159ec2ca89ebc95f8b340045e2e8e7ecf3066cf1e864fdc971a0",
+  "tests": {
+    "passed": 142,
+    "failed": 0,
+    "ignored": 11
+  },
+  "final_source": "dexrouter-lbfgsb/src/line_search.rs",
+  "analytic_evidence": {
+    "objective": "h*x*x/2 +/- x",
+    "start": 0,
+    "narrow_h_1e24_before": {
+      "evaluations": 21,
+      "iterations": 0,
+      "status": "LineSearchFailed",
+      "projected_gradient": 1
+    },
+    "narrow_h_1e24_after": {
+      "evaluations": 3,
+      "iterations": 1,
+      "status": "ConvergedProjectedGradient"
+    },
+    "flat_h_1e12_inverse_f64_before": {
+      "evaluations": 21,
+      "iterations": 0,
+      "status": "LineSearchFailed",
+      "projected_gradient": 1
+    },
+    "flat_h_1e12_inverse_f64_after": {
+      "evaluations_upper_bound": 5,
+      "status": "ConvergedProjectedGradient"
+    },
+    "regression_file": "dexrouter-lbfgsb/tests/line_search_scaling.rs"
+  },
+  "baseline": [
+    {
+      "backend": "rust-raw",
+      "variant": "baseline",
+      "warm_iterations_cap": null,
+      "repetitions": 3,
+      "warm_price_hash": "2af8d49639e679ce",
+      "iterations": 12761,
+      "evaluations": 27161,
+      "status": "LineSearchFailed",
+      "objective": 3.469847370091608,
+      "projected_gradient_inf_norm": 0.005944073843315181,
+      "strict_acceptance_passed": true,
+      "dd_updates": 18,
+      "max_relative_flow_residual": "1.480333011670787191793514285608219614535055262058313502684296301309141854330073681075654981757562892E-11",
+      "production_status": "no_admissible_candidate",
+      "terminal_audit_bytes_equal_across_repeats": true,
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms_median": 1.171023
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms_median": 4.0275099999999995
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms_median": 7.051235
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms_median": 20.508459
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms_median": 91.43879000000001
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 5639,
+          "evaluations": 11251,
+          "f": 3.499994462882705,
+          "pg": 0.11145499818927894,
+          "elapsed_ms_median": 652.599962
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 12550,
+          "evaluations": 26617,
+          "f": 3.4699996244028912,
+          "pg": 0.027800902773204357,
+          "elapsed_ms_median": 1474.0078780000001
+        }
+      ],
+      "warm_ms": {
+        "median": 1501.232829,
+        "min": 1497.72211,
+        "max": 1513.828631
+      },
+      "solve_wall_ms": {
+        "median": 3431.7706160000002,
+        "min": 3405.748364,
+        "max": 3446.0266850000003
+      },
+      "process_wall_ms": {
+        "median": 3941.154058033135,
+        "min": 3894.12968698889,
+        "max": 3945.986395003274
+      }
+    },
+    {
+      "backend": "rust-preprocessed",
+      "variant": "baseline",
+      "warm_iterations_cap": null,
+      "repetitions": 3,
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "iterations": 2027,
+      "evaluations": 35368,
+      "status": "ConvergedFunctionReduction",
+      "objective": 3.44163886621118,
+      "projected_gradient_inf_norm": null,
+      "strict_acceptance_passed": false,
+      "dd_updates": 32,
+      "max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "production_status": null,
+      "terminal_audit_bytes_equal_across_repeats": true,
+      "milestones": [],
+      "warm_ms": {
+        "median": 381.05534800000004,
+        "min": 369.213211,
+        "max": 395.854865
+      },
+      "solve_wall_ms": {
+        "median": 1833.50957,
+        "min": 1826.817991,
+        "max": 1904.743974
+      },
+      "process_wall_ms": {
+        "median": 2340.008812956512,
+        "min": 2290.460277989041,
+        "max": 2390.7948190462776
+      }
+    }
+  ],
+  "summary": [
+    {
+      "stage": "discarded-interior-secant",
+      "backend": "rust-raw",
+      "repetitions": 3,
+      "warm": {
+        "backend": "rust-raw",
+        "iterations": 70339,
+        "evaluations": 121826,
+        "status": "ConvergedFunctionReduction",
+        "objective": 3.4416392110260183,
+        "projected_gradient_inf_norm": 0.0007864990636098943
+      },
+      "warm_price_hash": "51e864164db20375",
+      "strict_dd_passed": true,
+      "max_relative_flow_residual": "1.480333011670787153120906962123716351415234160953592111131779056609919581332187219986574833031221320E-11",
+      "restarts": 69,
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms_median": 1.000858
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms_median": 3.687581
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms_median": 6.333155
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms_median": 18.68245
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms_median": 89.049165
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 9357,
+          "evaluations": 19309,
+          "f": 3.499988406571461,
+          "pg": 0.48303047907676344,
+          "elapsed_ms_median": 1084.870999
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 18825,
+          "evaluations": 39902,
+          "f": 3.4699989899648953,
+          "pg": 0.048914059302333744,
+          "elapsed_ms_median": 2195.578375
+        },
+        {
+          "threshold": 3.45,
+          "iteration": 34838,
+          "evaluations": 74485,
+          "f": 3.449999886931902,
+          "pg": 0.007462802213733373,
+          "elapsed_ms_median": 4104.208934
+        }
+      ],
+      "warm_ms": {
+        "median": 7298.6131749999995,
+        "min": 7268.615967,
+        "max": 7427.370535
+      },
+      "solve_ms": {
+        "median": 8840.308812,
+        "min": 8797.438748999999,
+        "max": 8968.790564
+      }
+    },
+    {
+      "stage": "discarded-interior-secant",
+      "backend": "rust-preprocessed",
+      "repetitions": 3,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2022,
+        "evaluations": 41084,
+        "restarts": 13,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.4416388662111794,
+        "original_final_objective": 3.441638866211179,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.2815942349230227,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2772914,
+        "dd_curvature_calls": 27832,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "0b1cd5dc396e3d7f",
+      "strict_dd_passed": false,
+      "max_relative_flow_residual": "1",
+      "restarts": 0,
+      "milestones": [],
+      "warm_ms": {
+        "median": 410.889794,
+        "min": 403.348142,
+        "max": 427.386836
+      },
+      "solve_ms": {
+        "median": 784.085567,
+        "min": 758.193332,
+        "max": 803.688673
+      }
+    },
+    {
+      "stage": "endpoint-only",
+      "backend": "rust-raw",
+      "repetitions": 1,
+      "warm": {
+        "backend": "rust-raw",
+        "iterations": 23807,
+        "evaluations": 50921,
+        "status": "LineSearchFailed",
+        "objective": 3.45488046181627,
+        "projected_gradient_inf_norm": 0.017577015926827366
+      },
+      "warm_price_hash": "78764206ba855fca",
+      "strict_dd_passed": true,
+      "max_relative_flow_residual": "1.480333011670787191811167148109602697608103566154593357249284171244061409687488269467719890073402808E-11",
+      "restarts": 35,
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms_median": 1.1396
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms_median": 3.9603479999999998
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms_median": 6.971052
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms_median": 20.462797000000002
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms_median": 94.96017800000001
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 5133,
+          "evaluations": 10050,
+          "f": 3.4999980747427504,
+          "pg": 0.10913998109100834,
+          "elapsed_ms_median": 598.937866
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 9643,
+          "evaluations": 19508,
+          "f": 3.469995110753759,
+          "pg": 0.03215934974901197,
+          "elapsed_ms_median": 1132.9855479999999
+        }
+      ],
+      "warm_ms": {
+        "median": 2853.457276,
+        "min": 2853.457276,
+        "max": 2853.457276
+      },
+      "solve_ms": {
+        "median": 4476.635655,
+        "min": 4476.635655,
+        "max": 4476.635655
+      }
+    },
+    {
+      "stage": "endpoint-only",
+      "backend": "rust-preprocessed",
+      "repetitions": 1,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2027,
+        "evaluations": 35368,
+        "restarts": 9,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.44163886621118,
+        "original_final_objective": 3.4416388662111785,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.23685711096453574,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2578808,
+        "dd_curvature_calls": 19880,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "strict_dd_passed": false,
+      "max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "restarts": 0,
+      "milestones": [],
+      "warm_ms": {
+        "median": 381.926102,
+        "min": 381.926102,
+        "max": 381.926102
+      },
+      "solve_ms": {
+        "median": 1847.623929,
+        "min": 1847.623929,
+        "max": 1847.623929
+      }
+    },
+    {
+      "stage": "discarded-cauchy-restart",
+      "backend": "rust-raw",
+      "repetitions": 1,
+      "warm": {
+        "backend": "rust-raw",
+        "iterations": 4372,
+        "evaluations": 8425,
+        "status": "LineSearchFailed",
+        "objective": 3.5042429024205566,
+        "projected_gradient_inf_norm": 0.04540650573245485
+      },
+      "warm_price_hash": "37aaae409cbe5750",
+      "strict_dd_passed": true,
+      "max_relative_flow_residual": "1.480333011670787191793514285608219614535055262058313502684296301309141854330073681075654981757562892E-11",
+      "restarts": 3,
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms_median": 0.976808
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms_median": 3.552487
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms_median": 6.1403170000000005
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms_median": 17.618202999999998
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms_median": 85.459363
+        }
+      ],
+      "warm_ms": {
+        "median": 493.656227,
+        "min": 493.656227,
+        "max": 493.656227
+      },
+      "solve_ms": {
+        "median": 2353.936521,
+        "min": 2353.936521,
+        "max": 2353.936521
+      }
+    },
+    {
+      "stage": "final",
+      "backend": "rust-raw",
+      "repetitions": 3,
+      "warm": {
+        "backend": "rust-raw",
+        "iterations": 23807,
+        "evaluations": 50921,
+        "status": "LineSearchFailed",
+        "objective": 3.45488046181627,
+        "projected_gradient_inf_norm": 0.017577015926827366
+      },
+      "warm_price_hash": "78764206ba855fca",
+      "strict_dd_passed": true,
+      "max_relative_flow_residual": "1.480333011670787191811167148109602697608103566154593357249284171244061409687488269467719890073402808E-11",
+      "restarts": 35,
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms_median": 1.079812
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms_median": 3.916377
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms_median": 6.669816
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms_median": 18.758593
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms_median": 90.49630499999999
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 5133,
+          "evaluations": 10050,
+          "f": 3.4999980747427504,
+          "pg": 0.10913998109100834,
+          "elapsed_ms_median": 593.662378
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 9643,
+          "evaluations": 19508,
+          "f": 3.469995110753759,
+          "pg": 0.03215934974901197,
+          "elapsed_ms_median": 1114.2669389999999
+        }
+      ],
+      "warm_ms": {
+        "median": 2784.8006400000004,
+        "min": 2709.213043,
+        "max": 2869.05383
+      },
+      "solve_ms": {
+        "median": 4426.944035,
+        "min": 4314.309824999999,
+        "max": 4589.345888999999
+      }
+    },
+    {
+      "stage": "final",
+      "backend": "rust-preprocessed",
+      "repetitions": 3,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2027,
+        "evaluations": 35368,
+        "restarts": 9,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.44163886621118,
+        "original_final_objective": 3.4416388662111785,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.23685711096453574,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2578808,
+        "dd_curvature_calls": 19880,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "strict_dd_passed": false,
+      "max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "restarts": 0,
+      "milestones": [],
+      "warm_ms": {
+        "median": 392.493923,
+        "min": 381.657309,
+        "max": 408.287504
+      },
+      "solve_ms": {
+        "median": 1869.916969,
+        "min": 1841.424764,
+        "max": 1945.5537029999998
+      }
+    }
+  ],
+  "cases": [
+    {
+      "case": "fix-agreed-quadratic-rust-raw-0",
+      "backend": "rust-raw",
+      "variant": "baseline",
+      "binary_sha256": "5d84beccb93ac7edb645ae6e42684a0fd016b5aeb2e23fad6ef6a9dc1d22b61f",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "6e3c33201acd71a106d503c7916a9ec1e012d93d4bc7f99cd2ce69b6cb0a141e",
+      "returncode": 0,
+      "warm": {
+        "backend": "rust-raw",
+        "elapsed_ms": 7298.6131749999995,
+        "iterations": 70339,
+        "evaluations": 121826,
+        "status": "ConvergedFunctionReduction",
+        "objective": 3.4416392110260183,
+        "projected_gradient_inf_norm": 0.0007864990636098943
+      },
+      "warm_price_hash": "51e864164db20375",
+      "process_wall_ms": 9360.092143993825,
+      "solve_wall_ms": 8840.308812,
+      "graph_stage_ms": {
+        "loss_integer_check": 20.071498,
+        "loss_model": 239.273635,
+        "loss_refinement": 889.506711,
+        "shared_legacy": 7531.800038,
+        "total": 8707.402508
+      },
+      "dd_updates": 2,
+      "dd_status": "strict_and_gradient_satisfied",
+      "strict_acceptance_passed": true,
+      "bad_tokens": [],
+      "max_relative_flow_residual": "1.480333011670787153120906962123716351415234160953592111131779056609919581332187219986574833031221320E-11",
+      "scaled_gradient_max": "2.731805235062861241958172341637791450587276615623185940714993100192680496492894411205605122077873248E-22",
+      "floor_violations": 0,
+      "production_status": "no_admissible_candidate",
+      "kernel_counters": {
+        "accepted_curvature": 70339,
+        "all_free_subspace": 87,
+        "cauchy_segment": 93,
+        "failed_search_restart": 69,
+        "feasible_newton_shortcut": 70251,
+        "hessian_cache_rebuild": 88,
+        "hessian_product": 267,
+        "search_direction": 70339,
+        "subspace": 87,
+        "uniform_truncation": 87
+      },
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms": 1.05236
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms": 3.936396
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms": 6.878661999999999
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms": 19.127616
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms": 89.454788
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 9357,
+          "evaluations": 19309,
+          "f": 3.499988406571461,
+          "pg": 0.48303047907676344,
+          "elapsed_ms": 1084.870999
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 18825,
+          "evaluations": 39902,
+          "f": 3.4699989899648953,
+          "pg": 0.048914059302333744,
+          "elapsed_ms": 2187.208155
+        },
+        {
+          "threshold": 3.45,
+          "iteration": 34838,
+          "evaluations": 74485,
+          "f": 3.449999886931902,
+          "pg": 0.007462802213733373,
+          "elapsed_ms": 4104.208934
+        }
+      ],
+      "restarts": [
+        {
+          "iteration": 1732,
+          "evaluations": 3236,
+          "f": 3.582268674186293,
+          "pg": 0.6413493484766566,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 1764,
+          "evaluations": 3329,
+          "f": 3.5802987646158506,
+          "pg": 0.09964015989949129,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3099,
+          "evaluations": 6070,
+          "f": 3.5478290711023033,
+          "pg": 0.1329512880344181,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3704,
+          "evaluations": 7294,
+          "f": 3.5363612125515256,
+          "pg": 0.12016193042314835,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3869,
+          "evaluations": 7667,
+          "f": 3.5356345606258137,
+          "pg": 0.014435459068716164,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6400,
+          "evaluations": 12830,
+          "f": 3.512516169668107,
+          "pg": 0.08832563106624149,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6610,
+          "evaluations": 13315,
+          "f": 3.5112622724511686,
+          "pg": 0.10034543600227944,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6647,
+          "evaluations": 13399,
+          "f": 3.5110344198133716,
+          "pg": 0.09754664500516874,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 7061,
+          "evaluations": 14282,
+          "f": 3.5097453209777902,
+          "pg": 0.17561600216945736,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8037,
+          "evaluations": 16356,
+          "f": 3.5044095349139908,
+          "pg": 0.13372809018717177,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8211,
+          "evaluations": 16749,
+          "f": 3.5031745205560436,
+          "pg": 0.05701904612522797,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8235,
+          "evaluations": 16814,
+          "f": 3.5030476757318407,
+          "pg": 0.16320067732848811,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8360,
+          "evaluations": 17098,
+          "f": 3.5023266317625454,
+          "pg": 0.07937292589008317,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 9710,
+          "evaluations": 20072,
+          "f": 3.4985040434766725,
+          "pg": 0.1798696352152854,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10416,
+          "evaluations": 21566,
+          "f": 3.496413783898595,
+          "pg": 0.024241223830803016,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10487,
+          "evaluations": 21726,
+          "f": 3.496313805324839,
+          "pg": 0.01712691274729224,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10545,
+          "evaluations": 21882,
+          "f": 3.4962655736746875,
+          "pg": 0.019559742377638828,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10915,
+          "evaluations": 22648,
+          "f": 3.495729697980095,
+          "pg": 0.061767493952668215,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10995,
+          "evaluations": 22853,
+          "f": 3.4955848126371114,
+          "pg": 0.31040916807729907,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11766,
+          "evaluations": 24543,
+          "f": 3.4931494351839705,
+          "pg": 0.09936117885435897,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13262,
+          "evaluations": 27811,
+          "f": 3.48889175169257,
+          "pg": 0.25333269526858176,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13969,
+          "evaluations": 29415,
+          "f": 3.486920299347295,
+          "pg": 0.015456982233805297,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14192,
+          "evaluations": 29931,
+          "f": 3.4866233611408624,
+          "pg": 0.013181016035102158,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14449,
+          "evaluations": 30533,
+          "f": 3.486407865000273,
+          "pg": 0.061465170263814185,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14719,
+          "evaluations": 31115,
+          "f": 3.4861165340133535,
+          "pg": 0.07907679907324071,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14990,
+          "evaluations": 31692,
+          "f": 3.485884876595132,
+          "pg": 0.06517892244599853,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17194,
+          "evaluations": 36360,
+          "f": 3.472746540576844,
+          "pg": 0.0387240780434598,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17235,
+          "evaluations": 36486,
+          "f": 3.4726899374417317,
+          "pg": 0.18310704866403937,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18005,
+          "evaluations": 38094,
+          "f": 3.4709669592576544,
+          "pg": 0.10148921949002862,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20181,
+          "evaluations": 42719,
+          "f": 3.4674678107462644,
+          "pg": 0.020790150127559637,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20249,
+          "evaluations": 42892,
+          "f": 3.46732608796021,
+          "pg": 0.8256824268332874,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20642,
+          "evaluations": 43723,
+          "f": 3.4667877598819814,
+          "pg": 0.010510919709352457,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21698,
+          "evaluations": 45979,
+          "f": 3.4647776940056625,
+          "pg": 0.06717264733337537,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21786,
+          "evaluations": 46153,
+          "f": 3.4646803384767955,
+          "pg": 0.01596043473690555,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22633,
+          "evaluations": 48038,
+          "f": 3.463960978801327,
+          "pg": 0.005423172691805938,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22790,
+          "evaluations": 48422,
+          "f": 3.463890000104543,
+          "pg": 0.03709354593317577,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23283,
+          "evaluations": 49486,
+          "f": 3.463548997756215,
+          "pg": 0.019916580098918585,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23966,
+          "evaluations": 50949,
+          "f": 3.4631475132828475,
+          "pg": 0.07209470532976768,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 24088,
+          "evaluations": 51252,
+          "f": 3.463099154457495,
+          "pg": 0.003520525764195053,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 25509,
+          "evaluations": 54371,
+          "f": 3.459571934508866,
+          "pg": 0.41324154583602174,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 25703,
+          "evaluations": 54758,
+          "f": 3.458600280279432,
+          "pg": 0.07359500183986487,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 26710,
+          "evaluations": 57114,
+          "f": 3.4572012922378406,
+          "pg": 0.014902755243578609,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 27290,
+          "evaluations": 58341,
+          "f": 3.4568849729109385,
+          "pg": 0.004265004336520426,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 29398,
+          "evaluations": 62820,
+          "f": 3.454203229368049,
+          "pg": 0.07964380729967296,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 29906,
+          "evaluations": 63848,
+          "f": 3.4537353336877628,
+          "pg": 0.006031558567689238,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30506,
+          "evaluations": 65058,
+          "f": 3.452946181223159,
+          "pg": 0.046188988676244803,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30728,
+          "evaluations": 65527,
+          "f": 3.452629522396654,
+          "pg": 0.05273204095407358,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30971,
+          "evaluations": 66065,
+          "f": 3.45244001677991,
+          "pg": 0.2720607654254395,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 31897,
+          "evaluations": 68095,
+          "f": 3.450836311199475,
+          "pg": 0.05043046424323149,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32055,
+          "evaluations": 68487,
+          "f": 3.450625015429097,
+          "pg": 0.027489895301473378,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32201,
+          "evaluations": 68833,
+          "f": 3.450558173226575,
+          "pg": 0.011663276914676004,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32692,
+          "evaluations": 69898,
+          "f": 3.4504008580182535,
+          "pg": 0.005063721615592651,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32928,
+          "evaluations": 70427,
+          "f": 3.450368845587386,
+          "pg": 0.011412842008622588,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33158,
+          "evaluations": 70920,
+          "f": 3.450341470347377,
+          "pg": 0.004963334107734019,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33416,
+          "evaluations": 71563,
+          "f": 3.45027967150958,
+          "pg": 0.012583460219080371,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33482,
+          "evaluations": 71739,
+          "f": 3.4502592424752665,
+          "pg": 0.007666213489214636,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33507,
+          "evaluations": 71802,
+          "f": 3.4502549499644872,
+          "pg": 0.027127705543589176,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 34281,
+          "evaluations": 73365,
+          "f": 3.450076102183244,
+          "pg": 0.11941992898063947,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 34946,
+          "evaluations": 74763,
+          "f": 3.449962163579192,
+          "pg": 0.020864493892612038,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35312,
+          "evaluations": 75495,
+          "f": 3.449916528009042,
+          "pg": 0.00808465467873576,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35333,
+          "evaluations": 75587,
+          "f": 3.449915377943223,
+          "pg": 0.48398662246000873,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35404,
+          "evaluations": 75741,
+          "f": 3.4499115254831723,
+          "pg": 0.002664517798915619,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35468,
+          "evaluations": 75881,
+          "f": 3.4499094757364435,
+          "pg": 0.004249926018533072,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35557,
+          "evaluations": 76064,
+          "f": 3.4499069546796837,
+          "pg": 0.004469260777588479,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 38065,
+          "evaluations": 81313,
+          "f": 3.441773635185445,
+          "pg": 0.02716413127892576,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 39381,
+          "evaluations": 83240,
+          "f": 3.4417531041689955,
+          "pg": 0.0026516507051694343,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 42179,
+          "evaluations": 87374,
+          "f": 3.4417326728729125,
+          "pg": 0.0013290962133061539,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 43650,
+          "evaluations": 89333,
+          "f": 3.4417291392953904,
+          "pg": 0.003159323093464044,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 44887,
+          "evaluations": 91110,
+          "f": 3.4417237614964864,
+          "pg": 0.002803684811248476,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "terminal_search": [],
+      "dd_line_search_trials": 2,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-agreed-quadratic-rust-raw-0-process.json",
+      "audit": "target/hermes-repro/runs/fix-agreed-quadratic-rust-raw-0-dd-audit.json",
+      "stage": "discarded-interior-secant"
+    },
+    {
+      "case": "fix-agreed-quadratic-rust-raw-1",
+      "backend": "rust-raw",
+      "variant": "baseline",
+      "binary_sha256": "5d84beccb93ac7edb645ae6e42684a0fd016b5aeb2e23fad6ef6a9dc1d22b61f",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "6e3c33201acd71a106d503c7916a9ec1e012d93d4bc7f99cd2ce69b6cb0a141e",
+      "returncode": 0,
+      "warm": {
+        "backend": "rust-raw",
+        "elapsed_ms": 7427.370535,
+        "iterations": 70339,
+        "evaluations": 121826,
+        "status": "ConvergedFunctionReduction",
+        "objective": 3.4416392110260183,
+        "projected_gradient_inf_norm": 0.0007864990636098943
+      },
+      "warm_price_hash": "51e864164db20375",
+      "process_wall_ms": 9460.503038018942,
+      "solve_wall_ms": 8968.790564,
+      "graph_stage_ms": {
+        "loss_integer_check": 21.217397,
+        "loss_model": 250.67961900000003,
+        "loss_refinement": 874.702345,
+        "shared_legacy": 7662.977079,
+        "total": 8837.087995999998
+      },
+      "dd_updates": 2,
+      "dd_status": "strict_and_gradient_satisfied",
+      "strict_acceptance_passed": true,
+      "bad_tokens": [],
+      "max_relative_flow_residual": "1.480333011670787153120906962123716351415234160953592111131779056609919581332187219986574833031221320E-11",
+      "scaled_gradient_max": "2.731805235062861241958172341637791450587276615623185940714993100192680496492894411205605122077873248E-22",
+      "floor_violations": 0,
+      "production_status": "no_admissible_candidate",
+      "kernel_counters": {
+        "accepted_curvature": 70339,
+        "all_free_subspace": 87,
+        "cauchy_segment": 93,
+        "failed_search_restart": 69,
+        "feasible_newton_shortcut": 70251,
+        "hessian_cache_rebuild": 88,
+        "hessian_product": 267,
+        "search_direction": 70339,
+        "subspace": 87,
+        "uniform_truncation": 87
+      },
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms": 0.9952979999999999
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms": 3.631044
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms": 6.254663
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms": 17.772248
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms": 85.740246
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 9357,
+          "evaluations": 19309,
+          "f": 3.499988406571461,
+          "pg": 0.48303047907676344,
+          "elapsed_ms": 1068.297246
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 18825,
+          "evaluations": 39902,
+          "f": 3.4699989899648953,
+          "pg": 0.048914059302333744,
+          "elapsed_ms": 2195.578375
+        },
+        {
+          "threshold": 3.45,
+          "iteration": 34838,
+          "evaluations": 74485,
+          "f": 3.449999886931902,
+          "pg": 0.007462802213733373,
+          "elapsed_ms": 4069.5869079999998
+        }
+      ],
+      "restarts": [
+        {
+          "iteration": 1732,
+          "evaluations": 3236,
+          "f": 3.582268674186293,
+          "pg": 0.6413493484766566,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 1764,
+          "evaluations": 3329,
+          "f": 3.5802987646158506,
+          "pg": 0.09964015989949129,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3099,
+          "evaluations": 6070,
+          "f": 3.5478290711023033,
+          "pg": 0.1329512880344181,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3704,
+          "evaluations": 7294,
+          "f": 3.5363612125515256,
+          "pg": 0.12016193042314835,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3869,
+          "evaluations": 7667,
+          "f": 3.5356345606258137,
+          "pg": 0.014435459068716164,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6400,
+          "evaluations": 12830,
+          "f": 3.512516169668107,
+          "pg": 0.08832563106624149,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6610,
+          "evaluations": 13315,
+          "f": 3.5112622724511686,
+          "pg": 0.10034543600227944,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6647,
+          "evaluations": 13399,
+          "f": 3.5110344198133716,
+          "pg": 0.09754664500516874,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 7061,
+          "evaluations": 14282,
+          "f": 3.5097453209777902,
+          "pg": 0.17561600216945736,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8037,
+          "evaluations": 16356,
+          "f": 3.5044095349139908,
+          "pg": 0.13372809018717177,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8211,
+          "evaluations": 16749,
+          "f": 3.5031745205560436,
+          "pg": 0.05701904612522797,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8235,
+          "evaluations": 16814,
+          "f": 3.5030476757318407,
+          "pg": 0.16320067732848811,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8360,
+          "evaluations": 17098,
+          "f": 3.5023266317625454,
+          "pg": 0.07937292589008317,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 9710,
+          "evaluations": 20072,
+          "f": 3.4985040434766725,
+          "pg": 0.1798696352152854,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10416,
+          "evaluations": 21566,
+          "f": 3.496413783898595,
+          "pg": 0.024241223830803016,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10487,
+          "evaluations": 21726,
+          "f": 3.496313805324839,
+          "pg": 0.01712691274729224,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10545,
+          "evaluations": 21882,
+          "f": 3.4962655736746875,
+          "pg": 0.019559742377638828,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10915,
+          "evaluations": 22648,
+          "f": 3.495729697980095,
+          "pg": 0.061767493952668215,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10995,
+          "evaluations": 22853,
+          "f": 3.4955848126371114,
+          "pg": 0.31040916807729907,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11766,
+          "evaluations": 24543,
+          "f": 3.4931494351839705,
+          "pg": 0.09936117885435897,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13262,
+          "evaluations": 27811,
+          "f": 3.48889175169257,
+          "pg": 0.25333269526858176,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13969,
+          "evaluations": 29415,
+          "f": 3.486920299347295,
+          "pg": 0.015456982233805297,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14192,
+          "evaluations": 29931,
+          "f": 3.4866233611408624,
+          "pg": 0.013181016035102158,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14449,
+          "evaluations": 30533,
+          "f": 3.486407865000273,
+          "pg": 0.061465170263814185,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14719,
+          "evaluations": 31115,
+          "f": 3.4861165340133535,
+          "pg": 0.07907679907324071,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14990,
+          "evaluations": 31692,
+          "f": 3.485884876595132,
+          "pg": 0.06517892244599853,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17194,
+          "evaluations": 36360,
+          "f": 3.472746540576844,
+          "pg": 0.0387240780434598,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17235,
+          "evaluations": 36486,
+          "f": 3.4726899374417317,
+          "pg": 0.18310704866403937,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18005,
+          "evaluations": 38094,
+          "f": 3.4709669592576544,
+          "pg": 0.10148921949002862,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20181,
+          "evaluations": 42719,
+          "f": 3.4674678107462644,
+          "pg": 0.020790150127559637,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20249,
+          "evaluations": 42892,
+          "f": 3.46732608796021,
+          "pg": 0.8256824268332874,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20642,
+          "evaluations": 43723,
+          "f": 3.4667877598819814,
+          "pg": 0.010510919709352457,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21698,
+          "evaluations": 45979,
+          "f": 3.4647776940056625,
+          "pg": 0.06717264733337537,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21786,
+          "evaluations": 46153,
+          "f": 3.4646803384767955,
+          "pg": 0.01596043473690555,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22633,
+          "evaluations": 48038,
+          "f": 3.463960978801327,
+          "pg": 0.005423172691805938,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22790,
+          "evaluations": 48422,
+          "f": 3.463890000104543,
+          "pg": 0.03709354593317577,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23283,
+          "evaluations": 49486,
+          "f": 3.463548997756215,
+          "pg": 0.019916580098918585,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23966,
+          "evaluations": 50949,
+          "f": 3.4631475132828475,
+          "pg": 0.07209470532976768,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 24088,
+          "evaluations": 51252,
+          "f": 3.463099154457495,
+          "pg": 0.003520525764195053,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 25509,
+          "evaluations": 54371,
+          "f": 3.459571934508866,
+          "pg": 0.41324154583602174,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 25703,
+          "evaluations": 54758,
+          "f": 3.458600280279432,
+          "pg": 0.07359500183986487,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 26710,
+          "evaluations": 57114,
+          "f": 3.4572012922378406,
+          "pg": 0.014902755243578609,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 27290,
+          "evaluations": 58341,
+          "f": 3.4568849729109385,
+          "pg": 0.004265004336520426,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 29398,
+          "evaluations": 62820,
+          "f": 3.454203229368049,
+          "pg": 0.07964380729967296,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 29906,
+          "evaluations": 63848,
+          "f": 3.4537353336877628,
+          "pg": 0.006031558567689238,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30506,
+          "evaluations": 65058,
+          "f": 3.452946181223159,
+          "pg": 0.046188988676244803,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30728,
+          "evaluations": 65527,
+          "f": 3.452629522396654,
+          "pg": 0.05273204095407358,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30971,
+          "evaluations": 66065,
+          "f": 3.45244001677991,
+          "pg": 0.2720607654254395,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 31897,
+          "evaluations": 68095,
+          "f": 3.450836311199475,
+          "pg": 0.05043046424323149,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32055,
+          "evaluations": 68487,
+          "f": 3.450625015429097,
+          "pg": 0.027489895301473378,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32201,
+          "evaluations": 68833,
+          "f": 3.450558173226575,
+          "pg": 0.011663276914676004,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32692,
+          "evaluations": 69898,
+          "f": 3.4504008580182535,
+          "pg": 0.005063721615592651,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32928,
+          "evaluations": 70427,
+          "f": 3.450368845587386,
+          "pg": 0.011412842008622588,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33158,
+          "evaluations": 70920,
+          "f": 3.450341470347377,
+          "pg": 0.004963334107734019,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33416,
+          "evaluations": 71563,
+          "f": 3.45027967150958,
+          "pg": 0.012583460219080371,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33482,
+          "evaluations": 71739,
+          "f": 3.4502592424752665,
+          "pg": 0.007666213489214636,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33507,
+          "evaluations": 71802,
+          "f": 3.4502549499644872,
+          "pg": 0.027127705543589176,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 34281,
+          "evaluations": 73365,
+          "f": 3.450076102183244,
+          "pg": 0.11941992898063947,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 34946,
+          "evaluations": 74763,
+          "f": 3.449962163579192,
+          "pg": 0.020864493892612038,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35312,
+          "evaluations": 75495,
+          "f": 3.449916528009042,
+          "pg": 0.00808465467873576,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35333,
+          "evaluations": 75587,
+          "f": 3.449915377943223,
+          "pg": 0.48398662246000873,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35404,
+          "evaluations": 75741,
+          "f": 3.4499115254831723,
+          "pg": 0.002664517798915619,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35468,
+          "evaluations": 75881,
+          "f": 3.4499094757364435,
+          "pg": 0.004249926018533072,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35557,
+          "evaluations": 76064,
+          "f": 3.4499069546796837,
+          "pg": 0.004469260777588479,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 38065,
+          "evaluations": 81313,
+          "f": 3.441773635185445,
+          "pg": 0.02716413127892576,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 39381,
+          "evaluations": 83240,
+          "f": 3.4417531041689955,
+          "pg": 0.0026516507051694343,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 42179,
+          "evaluations": 87374,
+          "f": 3.4417326728729125,
+          "pg": 0.0013290962133061539,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 43650,
+          "evaluations": 89333,
+          "f": 3.4417291392953904,
+          "pg": 0.003159323093464044,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 44887,
+          "evaluations": 91110,
+          "f": 3.4417237614964864,
+          "pg": 0.002803684811248476,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "terminal_search": [],
+      "dd_line_search_trials": 2,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-agreed-quadratic-rust-raw-1-process.json",
+      "audit": "target/hermes-repro/runs/fix-agreed-quadratic-rust-raw-1-dd-audit.json",
+      "stage": "discarded-interior-secant"
+    },
+    {
+      "case": "fix-agreed-quadratic-rust-raw-2",
+      "backend": "rust-raw",
+      "variant": "baseline",
+      "binary_sha256": "5d84beccb93ac7edb645ae6e42684a0fd016b5aeb2e23fad6ef6a9dc1d22b61f",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "6e3c33201acd71a106d503c7916a9ec1e012d93d4bc7f99cd2ce69b6cb0a141e",
+      "returncode": 0,
+      "warm": {
+        "backend": "rust-raw",
+        "elapsed_ms": 7268.615967,
+        "iterations": 70339,
+        "evaluations": 121826,
+        "status": "ConvergedFunctionReduction",
+        "objective": 3.4416392110260183,
+        "projected_gradient_inf_norm": 0.0007864990636098943
+      },
+      "warm_price_hash": "51e864164db20375",
+      "process_wall_ms": 9309.16626099497,
+      "solve_wall_ms": 8797.438748999999,
+      "graph_stage_ms": {
+        "loss_integer_check": 20.480901,
+        "loss_model": 236.3499,
+        "loss_refinement": 876.740192,
+        "shared_legacy": 7501.16256,
+        "total": 8661.224595
+      },
+      "dd_updates": 2,
+      "dd_status": "strict_and_gradient_satisfied",
+      "strict_acceptance_passed": true,
+      "bad_tokens": [],
+      "max_relative_flow_residual": "1.480333011670787153120906962123716351415234160953592111131779056609919581332187219986574833031221320E-11",
+      "scaled_gradient_max": "2.731805235062861241958172341637791450587276615623185940714993100192680496492894411205605122077873248E-22",
+      "floor_violations": 0,
+      "production_status": "no_admissible_candidate",
+      "kernel_counters": {
+        "accepted_curvature": 70339,
+        "all_free_subspace": 87,
+        "cauchy_segment": 93,
+        "failed_search_restart": 69,
+        "feasible_newton_shortcut": 70251,
+        "hessian_cache_rebuild": 88,
+        "hessian_product": 267,
+        "search_direction": 70339,
+        "subspace": 87,
+        "uniform_truncation": 87
+      },
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms": 1.000858
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms": 3.687581
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms": 6.333155
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms": 18.68245
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms": 89.049165
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 9357,
+          "evaluations": 19309,
+          "f": 3.499988406571461,
+          "pg": 0.48303047907676344,
+          "elapsed_ms": 1093.059438
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 18825,
+          "evaluations": 39902,
+          "f": 3.4699989899648953,
+          "pg": 0.048914059302333744,
+          "elapsed_ms": 2254.9395900000004
+        },
+        {
+          "threshold": 3.45,
+          "iteration": 34838,
+          "evaluations": 74485,
+          "f": 3.449999886931902,
+          "pg": 0.007462802213733373,
+          "elapsed_ms": 4112.79107
+        }
+      ],
+      "restarts": [
+        {
+          "iteration": 1732,
+          "evaluations": 3236,
+          "f": 3.582268674186293,
+          "pg": 0.6413493484766566,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 1764,
+          "evaluations": 3329,
+          "f": 3.5802987646158506,
+          "pg": 0.09964015989949129,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3099,
+          "evaluations": 6070,
+          "f": 3.5478290711023033,
+          "pg": 0.1329512880344181,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3704,
+          "evaluations": 7294,
+          "f": 3.5363612125515256,
+          "pg": 0.12016193042314835,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3869,
+          "evaluations": 7667,
+          "f": 3.5356345606258137,
+          "pg": 0.014435459068716164,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6400,
+          "evaluations": 12830,
+          "f": 3.512516169668107,
+          "pg": 0.08832563106624149,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6610,
+          "evaluations": 13315,
+          "f": 3.5112622724511686,
+          "pg": 0.10034543600227944,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 6647,
+          "evaluations": 13399,
+          "f": 3.5110344198133716,
+          "pg": 0.09754664500516874,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 7061,
+          "evaluations": 14282,
+          "f": 3.5097453209777902,
+          "pg": 0.17561600216945736,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8037,
+          "evaluations": 16356,
+          "f": 3.5044095349139908,
+          "pg": 0.13372809018717177,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8211,
+          "evaluations": 16749,
+          "f": 3.5031745205560436,
+          "pg": 0.05701904612522797,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8235,
+          "evaluations": 16814,
+          "f": 3.5030476757318407,
+          "pg": 0.16320067732848811,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8360,
+          "evaluations": 17098,
+          "f": 3.5023266317625454,
+          "pg": 0.07937292589008317,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 9710,
+          "evaluations": 20072,
+          "f": 3.4985040434766725,
+          "pg": 0.1798696352152854,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10416,
+          "evaluations": 21566,
+          "f": 3.496413783898595,
+          "pg": 0.024241223830803016,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10487,
+          "evaluations": 21726,
+          "f": 3.496313805324839,
+          "pg": 0.01712691274729224,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10545,
+          "evaluations": 21882,
+          "f": 3.4962655736746875,
+          "pg": 0.019559742377638828,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10915,
+          "evaluations": 22648,
+          "f": 3.495729697980095,
+          "pg": 0.061767493952668215,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10995,
+          "evaluations": 22853,
+          "f": 3.4955848126371114,
+          "pg": 0.31040916807729907,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11766,
+          "evaluations": 24543,
+          "f": 3.4931494351839705,
+          "pg": 0.09936117885435897,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13262,
+          "evaluations": 27811,
+          "f": 3.48889175169257,
+          "pg": 0.25333269526858176,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13969,
+          "evaluations": 29415,
+          "f": 3.486920299347295,
+          "pg": 0.015456982233805297,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14192,
+          "evaluations": 29931,
+          "f": 3.4866233611408624,
+          "pg": 0.013181016035102158,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14449,
+          "evaluations": 30533,
+          "f": 3.486407865000273,
+          "pg": 0.061465170263814185,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14719,
+          "evaluations": 31115,
+          "f": 3.4861165340133535,
+          "pg": 0.07907679907324071,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 14990,
+          "evaluations": 31692,
+          "f": 3.485884876595132,
+          "pg": 0.06517892244599853,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17194,
+          "evaluations": 36360,
+          "f": 3.472746540576844,
+          "pg": 0.0387240780434598,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17235,
+          "evaluations": 36486,
+          "f": 3.4726899374417317,
+          "pg": 0.18310704866403937,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18005,
+          "evaluations": 38094,
+          "f": 3.4709669592576544,
+          "pg": 0.10148921949002862,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20181,
+          "evaluations": 42719,
+          "f": 3.4674678107462644,
+          "pg": 0.020790150127559637,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20249,
+          "evaluations": 42892,
+          "f": 3.46732608796021,
+          "pg": 0.8256824268332874,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20642,
+          "evaluations": 43723,
+          "f": 3.4667877598819814,
+          "pg": 0.010510919709352457,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21698,
+          "evaluations": 45979,
+          "f": 3.4647776940056625,
+          "pg": 0.06717264733337537,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21786,
+          "evaluations": 46153,
+          "f": 3.4646803384767955,
+          "pg": 0.01596043473690555,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22633,
+          "evaluations": 48038,
+          "f": 3.463960978801327,
+          "pg": 0.005423172691805938,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22790,
+          "evaluations": 48422,
+          "f": 3.463890000104543,
+          "pg": 0.03709354593317577,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23283,
+          "evaluations": 49486,
+          "f": 3.463548997756215,
+          "pg": 0.019916580098918585,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23966,
+          "evaluations": 50949,
+          "f": 3.4631475132828475,
+          "pg": 0.07209470532976768,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 24088,
+          "evaluations": 51252,
+          "f": 3.463099154457495,
+          "pg": 0.003520525764195053,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 25509,
+          "evaluations": 54371,
+          "f": 3.459571934508866,
+          "pg": 0.41324154583602174,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 25703,
+          "evaluations": 54758,
+          "f": 3.458600280279432,
+          "pg": 0.07359500183986487,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 26710,
+          "evaluations": 57114,
+          "f": 3.4572012922378406,
+          "pg": 0.014902755243578609,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 27290,
+          "evaluations": 58341,
+          "f": 3.4568849729109385,
+          "pg": 0.004265004336520426,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 29398,
+          "evaluations": 62820,
+          "f": 3.454203229368049,
+          "pg": 0.07964380729967296,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 29906,
+          "evaluations": 63848,
+          "f": 3.4537353336877628,
+          "pg": 0.006031558567689238,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30506,
+          "evaluations": 65058,
+          "f": 3.452946181223159,
+          "pg": 0.046188988676244803,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30728,
+          "evaluations": 65527,
+          "f": 3.452629522396654,
+          "pg": 0.05273204095407358,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 30971,
+          "evaluations": 66065,
+          "f": 3.45244001677991,
+          "pg": 0.2720607654254395,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 31897,
+          "evaluations": 68095,
+          "f": 3.450836311199475,
+          "pg": 0.05043046424323149,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32055,
+          "evaluations": 68487,
+          "f": 3.450625015429097,
+          "pg": 0.027489895301473378,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32201,
+          "evaluations": 68833,
+          "f": 3.450558173226575,
+          "pg": 0.011663276914676004,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32692,
+          "evaluations": 69898,
+          "f": 3.4504008580182535,
+          "pg": 0.005063721615592651,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 32928,
+          "evaluations": 70427,
+          "f": 3.450368845587386,
+          "pg": 0.011412842008622588,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33158,
+          "evaluations": 70920,
+          "f": 3.450341470347377,
+          "pg": 0.004963334107734019,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33416,
+          "evaluations": 71563,
+          "f": 3.45027967150958,
+          "pg": 0.012583460219080371,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33482,
+          "evaluations": 71739,
+          "f": 3.4502592424752665,
+          "pg": 0.007666213489214636,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 33507,
+          "evaluations": 71802,
+          "f": 3.4502549499644872,
+          "pg": 0.027127705543589176,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 34281,
+          "evaluations": 73365,
+          "f": 3.450076102183244,
+          "pg": 0.11941992898063947,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 34946,
+          "evaluations": 74763,
+          "f": 3.449962163579192,
+          "pg": 0.020864493892612038,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35312,
+          "evaluations": 75495,
+          "f": 3.449916528009042,
+          "pg": 0.00808465467873576,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35333,
+          "evaluations": 75587,
+          "f": 3.449915377943223,
+          "pg": 0.48398662246000873,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35404,
+          "evaluations": 75741,
+          "f": 3.4499115254831723,
+          "pg": 0.002664517798915619,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35468,
+          "evaluations": 75881,
+          "f": 3.4499094757364435,
+          "pg": 0.004249926018533072,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 35557,
+          "evaluations": 76064,
+          "f": 3.4499069546796837,
+          "pg": 0.004469260777588479,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 38065,
+          "evaluations": 81313,
+          "f": 3.441773635185445,
+          "pg": 0.02716413127892576,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 39381,
+          "evaluations": 83240,
+          "f": 3.4417531041689955,
+          "pg": 0.0026516507051694343,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 42179,
+          "evaluations": 87374,
+          "f": 3.4417326728729125,
+          "pg": 0.0013290962133061539,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 43650,
+          "evaluations": 89333,
+          "f": 3.4417291392953904,
+          "pg": 0.003159323093464044,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 44887,
+          "evaluations": 91110,
+          "f": 3.4417237614964864,
+          "pg": 0.002803684811248476,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "terminal_search": [],
+      "dd_line_search_trials": 2,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-agreed-quadratic-rust-raw-2-process.json",
+      "audit": "target/hermes-repro/runs/fix-agreed-quadratic-rust-raw-2-dd-audit.json",
+      "stage": "discarded-interior-secant"
+    },
+    {
+      "case": "fix-agreed-quadratic-rust-preprocessed-0",
+      "backend": "rust-preprocessed",
+      "variant": "baseline",
+      "binary_sha256": "5d84beccb93ac7edb645ae6e42684a0fd016b5aeb2e23fad6ef6a9dc1d22b61f",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "6e4094bec7f69c5c4cf74c215bb0900f9cb00122b936d8053525c2cf6c1d15bf",
+      "returncode": 1,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "elapsed_ms": 427.386836,
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2022,
+        "evaluations": 41084,
+        "restarts": 13,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.4416388662111794,
+        "original_final_objective": 3.441638866211179,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.2815942349230227,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2772914,
+        "dd_curvature_calls": 27832,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "0b1cd5dc396e3d7f",
+      "process_wall_ms": 1287.5339009915479,
+      "solve_wall_ms": 803.688673,
+      "graph_stage_ms": null,
+      "dd_updates": 0,
+      "dd_status": "line_search_failed",
+      "strict_acceptance_passed": false,
+      "bad_tokens": [
+        42,
+        43,
+        68,
+        79,
+        104,
+        106,
+        111,
+        112,
+        118,
+        122,
+        123,
+        151,
+        173,
+        180,
+        187,
+        188,
+        207,
+        211,
+        229,
+        233,
+        237,
+        249,
+        264,
+        274,
+        276,
+        279,
+        326,
+        332,
+        366,
+        372,
+        373,
+        389,
+        392,
+        402,
+        415,
+        451,
+        471,
+        475,
+        517,
+        518,
+        519,
+        521,
+        536,
+        562,
+        564,
+        587,
+        598
+      ],
+      "max_relative_flow_residual": "1",
+      "scaled_gradient_max": "3.243668794044015381347622014006329142615891482345248000254169701410478542758195431304088648473944683E-10",
+      "floor_violations": 0,
+      "production_status": null,
+      "kernel_counters": {
+        "accepted_curvature": 2008,
+        "all_free_subspace": 88,
+        "cauchy_segment": 105,
+        "feasible_newton_shortcut": 1906,
+        "hessian_cache_rebuild": 102,
+        "hessian_product": 281,
+        "search_direction": 2008,
+        "subspace": 88,
+        "uniform_truncation": 88,
+        "failed_search_restart": 1
+      },
+      "milestones": [],
+      "restarts": [],
+      "terminal_search": [],
+      "dd_line_search_trials": 48,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-agreed-quadratic-rust-preprocessed-0-process.json",
+      "audit": "target/hermes-repro/runs/fix-agreed-quadratic-rust-preprocessed-0-dd-audit.json",
+      "stage": "discarded-interior-secant"
+    },
+    {
+      "case": "fix-agreed-quadratic-rust-preprocessed-1",
+      "backend": "rust-preprocessed",
+      "variant": "baseline",
+      "binary_sha256": "5d84beccb93ac7edb645ae6e42684a0fd016b5aeb2e23fad6ef6a9dc1d22b61f",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "6e4094bec7f69c5c4cf74c215bb0900f9cb00122b936d8053525c2cf6c1d15bf",
+      "returncode": 1,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "elapsed_ms": 410.889794,
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2022,
+        "evaluations": 41084,
+        "restarts": 13,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.4416388662111794,
+        "original_final_objective": 3.441638866211179,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.2815942349230227,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2772914,
+        "dd_curvature_calls": 27832,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "0b1cd5dc396e3d7f",
+      "process_wall_ms": 1237.6816420000978,
+      "solve_wall_ms": 784.085567,
+      "graph_stage_ms": null,
+      "dd_updates": 0,
+      "dd_status": "line_search_failed",
+      "strict_acceptance_passed": false,
+      "bad_tokens": [
+        42,
+        43,
+        68,
+        79,
+        104,
+        106,
+        111,
+        112,
+        118,
+        122,
+        123,
+        151,
+        173,
+        180,
+        187,
+        188,
+        207,
+        211,
+        229,
+        233,
+        237,
+        249,
+        264,
+        274,
+        276,
+        279,
+        326,
+        332,
+        366,
+        372,
+        373,
+        389,
+        392,
+        402,
+        415,
+        451,
+        471,
+        475,
+        517,
+        518,
+        519,
+        521,
+        536,
+        562,
+        564,
+        587,
+        598
+      ],
+      "max_relative_flow_residual": "1",
+      "scaled_gradient_max": "3.243668794044015381347622014006329142615891482345248000254169701410478542758195431304088648473944683E-10",
+      "floor_violations": 0,
+      "production_status": null,
+      "kernel_counters": {
+        "accepted_curvature": 2008,
+        "all_free_subspace": 88,
+        "cauchy_segment": 105,
+        "feasible_newton_shortcut": 1906,
+        "hessian_cache_rebuild": 102,
+        "hessian_product": 281,
+        "search_direction": 2008,
+        "subspace": 88,
+        "uniform_truncation": 88,
+        "failed_search_restart": 1
+      },
+      "milestones": [],
+      "restarts": [],
+      "terminal_search": [],
+      "dd_line_search_trials": 48,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-agreed-quadratic-rust-preprocessed-1-process.json",
+      "audit": "target/hermes-repro/runs/fix-agreed-quadratic-rust-preprocessed-1-dd-audit.json",
+      "stage": "discarded-interior-secant"
+    },
+    {
+      "case": "fix-agreed-quadratic-rust-preprocessed-2",
+      "backend": "rust-preprocessed",
+      "variant": "baseline",
+      "binary_sha256": "5d84beccb93ac7edb645ae6e42684a0fd016b5aeb2e23fad6ef6a9dc1d22b61f",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "6e4094bec7f69c5c4cf74c215bb0900f9cb00122b936d8053525c2cf6c1d15bf",
+      "returncode": 1,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "elapsed_ms": 403.348142,
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2022,
+        "evaluations": 41084,
+        "restarts": 13,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.4416388662111794,
+        "original_final_objective": 3.441638866211179,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.2815942349230227,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2772914,
+        "dd_curvature_calls": 27832,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "0b1cd5dc396e3d7f",
+      "process_wall_ms": 1287.941770046018,
+      "solve_wall_ms": 758.193332,
+      "graph_stage_ms": null,
+      "dd_updates": 0,
+      "dd_status": "line_search_failed",
+      "strict_acceptance_passed": false,
+      "bad_tokens": [
+        42,
+        43,
+        68,
+        79,
+        104,
+        106,
+        111,
+        112,
+        118,
+        122,
+        123,
+        151,
+        173,
+        180,
+        187,
+        188,
+        207,
+        211,
+        229,
+        233,
+        237,
+        249,
+        264,
+        274,
+        276,
+        279,
+        326,
+        332,
+        366,
+        372,
+        373,
+        389,
+        392,
+        402,
+        415,
+        451,
+        471,
+        475,
+        517,
+        518,
+        519,
+        521,
+        536,
+        562,
+        564,
+        587,
+        598
+      ],
+      "max_relative_flow_residual": "1",
+      "scaled_gradient_max": "3.243668794044015381347622014006329142615891482345248000254169701410478542758195431304088648473944683E-10",
+      "floor_violations": 0,
+      "production_status": null,
+      "kernel_counters": {
+        "accepted_curvature": 2008,
+        "all_free_subspace": 88,
+        "cauchy_segment": 105,
+        "feasible_newton_shortcut": 1906,
+        "hessian_cache_rebuild": 102,
+        "hessian_product": 281,
+        "search_direction": 2008,
+        "subspace": 88,
+        "uniform_truncation": 88,
+        "failed_search_restart": 1
+      },
+      "milestones": [],
+      "restarts": [],
+      "terminal_search": [],
+      "dd_line_search_trials": 48,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-agreed-quadratic-rust-preprocessed-2-process.json",
+      "audit": "target/hermes-repro/runs/fix-agreed-quadratic-rust-preprocessed-2-dd-audit.json",
+      "stage": "discarded-interior-secant"
+    },
+    {
+      "case": "fix-endpoint-only-raw-0",
+      "backend": "rust-raw",
+      "variant": "baseline",
+      "binary_sha256": "13b616e5d6bda9d5a4d1c5b85d8e3eb957307ffc2a9258020091ea2aaccfa9fc",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "55ba4faa2ba51a6176b86fc4aae68acd9d69e3813042db1878ffc7657fe21449",
+      "returncode": 0,
+      "warm": {
+        "backend": "rust-raw",
+        "elapsed_ms": 2853.457276,
+        "iterations": 23807,
+        "evaluations": 50921,
+        "status": "LineSearchFailed",
+        "objective": 3.45488046181627,
+        "projected_gradient_inf_norm": 0.017577015926827366
+      },
+      "warm_price_hash": "78764206ba855fca",
+      "process_wall_ms": 4998.044977022801,
+      "solve_wall_ms": 4476.635655,
+      "graph_stage_ms": {
+        "loss_integer_check": 20.750839,
+        "loss_model": 235.511581,
+        "loss_refinement": 884.249233,
+        "shared_legacy": 3161.138688,
+        "total": 4328.544091999999
+      },
+      "dd_updates": 9,
+      "dd_status": "strict_and_gradient_satisfied",
+      "strict_acceptance_passed": true,
+      "bad_tokens": [],
+      "max_relative_flow_residual": "1.480333011670787191811167148109602697608103566154593357249284171244061409687488269467719890073402808E-11",
+      "scaled_gradient_max": "3.691506335996822044387690385803619303086160095628452032168254423239188098534791256383187718104199604E-27",
+      "floor_violations": 0,
+      "production_status": "no_admissible_candidate",
+      "kernel_counters": {
+        "accepted_curvature": 23807,
+        "all_free_subspace": 36,
+        "cauchy_segment": 42,
+        "failed_search_restart": 35,
+        "feasible_newton_shortcut": 23771,
+        "hessian_cache_rebuild": 37,
+        "hessian_product": 114,
+        "search_direction": 23808,
+        "subspace": 36,
+        "uniform_truncation": 36
+      },
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms": 1.1396
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms": 3.9603479999999998
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms": 6.971052
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms": 20.462797000000002
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms": 94.96017800000001
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 5133,
+          "evaluations": 10050,
+          "f": 3.4999980747427504,
+          "pg": 0.10913998109100834,
+          "elapsed_ms": 598.937866
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 9643,
+          "evaluations": 19508,
+          "f": 3.469995110753759,
+          "pg": 0.03215934974901197,
+          "elapsed_ms": 1132.9855479999999
+        }
+      ],
+      "restarts": [
+        {
+          "iteration": 3226,
+          "evaluations": 6042,
+          "f": 3.5070204821122863,
+          "pg": 0.022404000644030392,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3366,
+          "evaluations": 6316,
+          "f": 3.5063769819641073,
+          "pg": 0.03917816056515762,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3927,
+          "evaluations": 7570,
+          "f": 3.504897661640277,
+          "pg": 0.0266190834050073,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 4262,
+          "evaluations": 8283,
+          "f": 3.504162667186548,
+          "pg": 0.028579013552254257,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8271,
+          "evaluations": 16683,
+          "f": 3.4725196874179654,
+          "pg": 0.09599022358614694,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8442,
+          "evaluations": 17124,
+          "f": 3.4722556228092727,
+          "pg": 0.026390068633883355,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10026,
+          "evaluations": 20399,
+          "f": 3.469187401952621,
+          "pg": 0.06243243803124071,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11243,
+          "evaluations": 22983,
+          "f": 3.4671146275085625,
+          "pg": 0.010973432921308514,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11249,
+          "evaluations": 23018,
+          "f": 3.4671143918511698,
+          "pg": 0.003909594853338673,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11467,
+          "evaluations": 23536,
+          "f": 3.467048290331216,
+          "pg": 0.93293898281817,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 12584,
+          "evaluations": 25880,
+          "f": 3.4646068395024754,
+          "pg": 0.0281688172115679,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13427,
+          "evaluations": 27662,
+          "f": 3.4625709896660997,
+          "pg": 0.03076758525652734,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13530,
+          "evaluations": 27919,
+          "f": 3.4625053779986117,
+          "pg": 0.060265820454892184,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13597,
+          "evaluations": 28122,
+          "f": 3.462486564287667,
+          "pg": 0.021364480601654957,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 15549,
+          "evaluations": 32409,
+          "f": 3.4599200310813325,
+          "pg": 0.018360295473101557,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 15987,
+          "evaluations": 33475,
+          "f": 3.4594923355294025,
+          "pg": 0.012942435766986119,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 16136,
+          "evaluations": 33822,
+          "f": 3.45940855243115,
+          "pg": 0.03500613255856952,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17894,
+          "evaluations": 37761,
+          "f": 3.4579627241349993,
+          "pg": 0.011720229435254406,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18115,
+          "evaluations": 38249,
+          "f": 3.457882859140406,
+          "pg": 0.16232071650929694,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18456,
+          "evaluations": 38975,
+          "f": 3.4577341811513223,
+          "pg": 0.13677549812122786,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18616,
+          "evaluations": 39348,
+          "f": 3.4576870078233957,
+          "pg": 0.023701412484766173,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18660,
+          "evaluations": 39482,
+          "f": 3.4576824460502205,
+          "pg": 0.003383091081412901,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 19668,
+          "evaluations": 41654,
+          "f": 3.4567604255445974,
+          "pg": 0.07830450175476322,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 19985,
+          "evaluations": 42321,
+          "f": 3.4564916845187827,
+          "pg": 0.07376551549122981,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20267,
+          "evaluations": 42964,
+          "f": 3.4563763347989336,
+          "pg": 0.019543177405804107,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20821,
+          "evaluations": 44300,
+          "f": 3.456102769886308,
+          "pg": 0.008206666165287391,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20864,
+          "evaluations": 44431,
+          "f": 3.4560844440551883,
+          "pg": 0.010883315006987686,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21113,
+          "evaluations": 44954,
+          "f": 3.456024518469999,
+          "pg": 0.04689335013669784,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21399,
+          "evaluations": 45518,
+          "f": 3.455936642964723,
+          "pg": 0.04146665033902752,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22067,
+          "evaluations": 47085,
+          "f": 3.4556236307535935,
+          "pg": 0.1222244629836001,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22421,
+          "evaluations": 47850,
+          "f": 3.455463520909494,
+          "pg": 0.007120799960799137,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22962,
+          "evaluations": 49006,
+          "f": 3.4553092485438843,
+          "pg": 0.0267833597893452,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23126,
+          "evaluations": 49349,
+          "f": 3.455270047547,
+          "pg": 0.0072710121038361995,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23765,
+          "evaluations": 50782,
+          "f": 3.4549064208929865,
+          "pg": 0.026101126393486954,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23807,
+          "evaluations": 50901,
+          "f": 3.45488046181627,
+          "pg": 0.017577015926827366,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "terminal_search": [
+        {
+          "iteration": 23807,
+          "evaluations": 50921,
+          "f": 3.45488046181627,
+          "pg": 0.017577015926827366,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "dd_line_search_trials": 41,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-endpoint-only-raw-0-process.json",
+      "audit": "target/hermes-repro/runs/fix-endpoint-only-raw-0-dd-audit.json",
+      "stage": "endpoint-only"
+    },
+    {
+      "case": "fix-endpoint-only-preprocessed-0",
+      "backend": "rust-preprocessed",
+      "variant": "baseline",
+      "binary_sha256": "13b616e5d6bda9d5a4d1c5b85d8e3eb957307ffc2a9258020091ea2aaccfa9fc",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "7399b3b3354e1bcac5ac83c3908e7cb8d1c55608843be52e25b937efb478c22b",
+      "returncode": 1,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "elapsed_ms": 381.926102,
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2027,
+        "evaluations": 35368,
+        "restarts": 9,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.44163886621118,
+        "original_final_objective": 3.4416388662111785,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.23685711096453574,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2578808,
+        "dd_curvature_calls": 19880,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "process_wall_ms": 2290.9720479510725,
+      "solve_wall_ms": 1847.623929,
+      "graph_stage_ms": null,
+      "dd_updates": 32,
+      "dd_status": "iteration_limit",
+      "strict_acceptance_passed": false,
+      "bad_tokens": [
+        264
+      ],
+      "max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "scaled_gradient_max": "3.025707948214682604804803924648927868838381914127111703858830652510253286432460651667876044843268282E-20",
+      "floor_violations": 0,
+      "production_status": null,
+      "kernel_counters": {
+        "accepted_curvature": 2016,
+        "all_free_subspace": 88,
+        "cauchy_segment": 100,
+        "feasible_newton_shortcut": 1919,
+        "hessian_cache_rebuild": 97,
+        "hessian_product": 276,
+        "search_direction": 2016,
+        "subspace": 88,
+        "uniform_truncation": 88,
+        "failed_search_restart": 2
+      },
+      "milestones": [],
+      "restarts": [],
+      "terminal_search": [],
+      "dd_line_search_trials": 1107,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-endpoint-only-preprocessed-0-process.json",
+      "audit": "target/hermes-repro/runs/fix-endpoint-only-preprocessed-0-dd-audit.json",
+      "stage": "endpoint-only"
+    },
+    {
+      "case": "fix-endpoint-only-cauchy-0",
+      "backend": "rust-raw",
+      "variant": "rust-cauchy",
+      "binary_sha256": "13b616e5d6bda9d5a4d1c5b85d8e3eb957307ffc2a9258020091ea2aaccfa9fc",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "578db65270054f2e64cd5908d232f27753cb602c242b97928d0539b77c7109ee",
+      "returncode": 0,
+      "warm": {
+        "backend": "rust-raw",
+        "elapsed_ms": 493.656227,
+        "iterations": 4372,
+        "evaluations": 8425,
+        "status": "LineSearchFailed",
+        "objective": 3.5042429024205566,
+        "projected_gradient_inf_norm": 0.04540650573245485
+      },
+      "warm_price_hash": "37aaae409cbe5750",
+      "process_wall_ms": 2842.052378982771,
+      "solve_wall_ms": 2353.936521,
+      "graph_stage_ms": {
+        "loss_integer_check": 19.794648,
+        "loss_model": 241.678944,
+        "loss_refinement": 872.301829,
+        "shared_legacy": 1054.042876,
+        "total": 2214.565861
+      },
+      "dd_updates": 17,
+      "dd_status": "strict_and_gradient_satisfied",
+      "strict_acceptance_passed": true,
+      "bad_tokens": [],
+      "max_relative_flow_residual": "1.480333011670787191793514285608219614535055262058313502684296301309141854330073681075654981757562892E-11",
+      "scaled_gradient_max": "1.670570144828988802878135563467853344702289636625052791377335208703154671674856155834589400283052285E-25",
+      "floor_violations": 0,
+      "production_status": "no_admissible_candidate",
+      "kernel_counters": {
+        "accepted_curvature": 4372,
+        "all_free_subspace": 14,
+        "cauchy_segment": 25,
+        "failed_search_restart": 3,
+        "feasible_newton_shortcut": 4358,
+        "hessian_cache_rebuild": 18,
+        "hessian_product": 53,
+        "search_direction": 4376,
+        "subspace": 14,
+        "uniform_truncation": 14
+      },
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms": 0.976808
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms": 3.552487
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms": 6.1403170000000005
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms": 17.618202999999998
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms": 85.459363
+        }
+      ],
+      "restarts": [
+        {
+          "iteration": 3226,
+          "evaluations": 6042,
+          "f": 3.5070204821122863,
+          "pg": 0.022404000644030392,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 4216,
+          "evaluations": 8056,
+          "f": 3.50457187154167,
+          "pg": 0.09381139791072342,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 4372,
+          "evaluations": 8405,
+          "f": 3.5042429024205566,
+          "pg": 0.04540650573245485,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "terminal_search": [
+        {
+          "iteration": 4372,
+          "evaluations": 8425,
+          "f": 3.5042429024205566,
+          "pg": 0.04540650573245485,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "dd_line_search_trials": 285,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-endpoint-only-cauchy-0-process.json",
+      "audit": "target/hermes-repro/runs/fix-endpoint-only-cauchy-0-dd-audit.json",
+      "stage": "discarded-cauchy-restart"
+    },
+    {
+      "case": "fix-final-search-rust-raw-0",
+      "backend": "rust-raw",
+      "variant": "baseline",
+      "binary_sha256": "cb3fddf8003cd73f44fbc4775473f4a4460d083c917082fe07289d50b1f1ccd0",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "55ba4faa2ba51a6176b86fc4aae68acd9d69e3813042db1878ffc7657fe21449",
+      "returncode": 0,
+      "warm": {
+        "backend": "rust-raw",
+        "elapsed_ms": 2784.8006400000004,
+        "iterations": 23807,
+        "evaluations": 50921,
+        "status": "LineSearchFailed",
+        "objective": 3.45488046181627,
+        "projected_gradient_inf_norm": 0.017577015926827366
+      },
+      "warm_price_hash": "78764206ba855fca",
+      "process_wall_ms": 4948.22453497909,
+      "solve_wall_ms": 4426.944035,
+      "graph_stage_ms": {
+        "loss_integer_check": 20.682204,
+        "loss_model": 234.256744,
+        "loss_refinement": 897.6963949999999,
+        "shared_legacy": 3088.891517,
+        "total": 4269.306661
+      },
+      "dd_updates": 9,
+      "dd_status": "strict_and_gradient_satisfied",
+      "strict_acceptance_passed": true,
+      "bad_tokens": [],
+      "max_relative_flow_residual": "1.480333011670787191811167148109602697608103566154593357249284171244061409687488269467719890073402808E-11",
+      "scaled_gradient_max": "3.691506335996822044387690385803619303086160095628452032168254423239188098534791256383187718104199604E-27",
+      "floor_violations": 0,
+      "production_status": "no_admissible_candidate",
+      "kernel_counters": {
+        "accepted_curvature": 23807,
+        "all_free_subspace": 36,
+        "cauchy_segment": 42,
+        "failed_search_restart": 35,
+        "feasible_newton_shortcut": 23771,
+        "hessian_cache_rebuild": 37,
+        "hessian_product": 114,
+        "search_direction": 23808,
+        "subspace": 36,
+        "uniform_truncation": 36
+      },
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms": 1.079812
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms": 4.090476
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms": 7.038506
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms": 20.468961
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms": 90.49630499999999
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 5133,
+          "evaluations": 10050,
+          "f": 3.4999980747427504,
+          "pg": 0.10913998109100834,
+          "elapsed_ms": 593.8545349999999
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 9643,
+          "evaluations": 19508,
+          "f": 3.469995110753759,
+          "pg": 0.03215934974901197,
+          "elapsed_ms": 1121.047497
+        }
+      ],
+      "restarts": [
+        {
+          "iteration": 3226,
+          "evaluations": 6042,
+          "f": 3.5070204821122863,
+          "pg": 0.022404000644030392,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3366,
+          "evaluations": 6316,
+          "f": 3.5063769819641073,
+          "pg": 0.03917816056515762,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3927,
+          "evaluations": 7570,
+          "f": 3.504897661640277,
+          "pg": 0.0266190834050073,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 4262,
+          "evaluations": 8283,
+          "f": 3.504162667186548,
+          "pg": 0.028579013552254257,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8271,
+          "evaluations": 16683,
+          "f": 3.4725196874179654,
+          "pg": 0.09599022358614694,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8442,
+          "evaluations": 17124,
+          "f": 3.4722556228092727,
+          "pg": 0.026390068633883355,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10026,
+          "evaluations": 20399,
+          "f": 3.469187401952621,
+          "pg": 0.06243243803124071,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11243,
+          "evaluations": 22983,
+          "f": 3.4671146275085625,
+          "pg": 0.010973432921308514,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11249,
+          "evaluations": 23018,
+          "f": 3.4671143918511698,
+          "pg": 0.003909594853338673,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11467,
+          "evaluations": 23536,
+          "f": 3.467048290331216,
+          "pg": 0.93293898281817,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 12584,
+          "evaluations": 25880,
+          "f": 3.4646068395024754,
+          "pg": 0.0281688172115679,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13427,
+          "evaluations": 27662,
+          "f": 3.4625709896660997,
+          "pg": 0.03076758525652734,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13530,
+          "evaluations": 27919,
+          "f": 3.4625053779986117,
+          "pg": 0.060265820454892184,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13597,
+          "evaluations": 28122,
+          "f": 3.462486564287667,
+          "pg": 0.021364480601654957,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 15549,
+          "evaluations": 32409,
+          "f": 3.4599200310813325,
+          "pg": 0.018360295473101557,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 15987,
+          "evaluations": 33475,
+          "f": 3.4594923355294025,
+          "pg": 0.012942435766986119,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 16136,
+          "evaluations": 33822,
+          "f": 3.45940855243115,
+          "pg": 0.03500613255856952,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17894,
+          "evaluations": 37761,
+          "f": 3.4579627241349993,
+          "pg": 0.011720229435254406,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18115,
+          "evaluations": 38249,
+          "f": 3.457882859140406,
+          "pg": 0.16232071650929694,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18456,
+          "evaluations": 38975,
+          "f": 3.4577341811513223,
+          "pg": 0.13677549812122786,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18616,
+          "evaluations": 39348,
+          "f": 3.4576870078233957,
+          "pg": 0.023701412484766173,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18660,
+          "evaluations": 39482,
+          "f": 3.4576824460502205,
+          "pg": 0.003383091081412901,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 19668,
+          "evaluations": 41654,
+          "f": 3.4567604255445974,
+          "pg": 0.07830450175476322,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 19985,
+          "evaluations": 42321,
+          "f": 3.4564916845187827,
+          "pg": 0.07376551549122981,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20267,
+          "evaluations": 42964,
+          "f": 3.4563763347989336,
+          "pg": 0.019543177405804107,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20821,
+          "evaluations": 44300,
+          "f": 3.456102769886308,
+          "pg": 0.008206666165287391,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20864,
+          "evaluations": 44431,
+          "f": 3.4560844440551883,
+          "pg": 0.010883315006987686,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21113,
+          "evaluations": 44954,
+          "f": 3.456024518469999,
+          "pg": 0.04689335013669784,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21399,
+          "evaluations": 45518,
+          "f": 3.455936642964723,
+          "pg": 0.04146665033902752,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22067,
+          "evaluations": 47085,
+          "f": 3.4556236307535935,
+          "pg": 0.1222244629836001,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22421,
+          "evaluations": 47850,
+          "f": 3.455463520909494,
+          "pg": 0.007120799960799137,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22962,
+          "evaluations": 49006,
+          "f": 3.4553092485438843,
+          "pg": 0.0267833597893452,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23126,
+          "evaluations": 49349,
+          "f": 3.455270047547,
+          "pg": 0.0072710121038361995,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23765,
+          "evaluations": 50782,
+          "f": 3.4549064208929865,
+          "pg": 0.026101126393486954,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23807,
+          "evaluations": 50901,
+          "f": 3.45488046181627,
+          "pg": 0.017577015926827366,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "terminal_search": [
+        {
+          "iteration": 23807,
+          "evaluations": 50921,
+          "f": 3.45488046181627,
+          "pg": 0.017577015926827366,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "dd_line_search_trials": 41,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-final-search-rust-raw-0-process.json",
+      "audit": "target/hermes-repro/runs/fix-final-search-rust-raw-0-dd-audit.json",
+      "stage": "final"
+    },
+    {
+      "case": "fix-final-search-rust-raw-1",
+      "backend": "rust-raw",
+      "variant": "baseline",
+      "binary_sha256": "cb3fddf8003cd73f44fbc4775473f4a4460d083c917082fe07289d50b1f1ccd0",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "55ba4faa2ba51a6176b86fc4aae68acd9d69e3813042db1878ffc7657fe21449",
+      "returncode": 0,
+      "warm": {
+        "backend": "rust-raw",
+        "elapsed_ms": 2869.05383,
+        "iterations": 23807,
+        "evaluations": 50921,
+        "status": "LineSearchFailed",
+        "objective": 3.45488046181627,
+        "projected_gradient_inf_norm": 0.017577015926827366
+      },
+      "warm_price_hash": "78764206ba855fca",
+      "process_wall_ms": 5097.184872021899,
+      "solve_wall_ms": 4589.345888999999,
+      "graph_stage_ms": {
+        "loss_integer_check": 24.365572999999998,
+        "loss_model": 252.52392099999997,
+        "loss_refinement": 940.6649769999999,
+        "shared_legacy": 3193.45631,
+        "total": 4443.947036
+      },
+      "dd_updates": 9,
+      "dd_status": "strict_and_gradient_satisfied",
+      "strict_acceptance_passed": true,
+      "bad_tokens": [],
+      "max_relative_flow_residual": "1.480333011670787191811167148109602697608103566154593357249284171244061409687488269467719890073402808E-11",
+      "scaled_gradient_max": "3.691506335996822044387690385803619303086160095628452032168254423239188098534791256383187718104199604E-27",
+      "floor_violations": 0,
+      "production_status": "no_admissible_candidate",
+      "kernel_counters": {
+        "accepted_curvature": 23807,
+        "all_free_subspace": 36,
+        "cauchy_segment": 42,
+        "failed_search_restart": 35,
+        "feasible_newton_shortcut": 23771,
+        "hessian_cache_rebuild": 37,
+        "hessian_product": 114,
+        "search_direction": 23808,
+        "subspace": 36,
+        "uniform_truncation": 36
+      },
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms": 1.097526
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms": 3.916377
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms": 6.669816
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms": 18.758593
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms": 94.238693
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 5133,
+          "evaluations": 10050,
+          "f": 3.4999980747427504,
+          "pg": 0.10913998109100834,
+          "elapsed_ms": 593.662378
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 9643,
+          "evaluations": 19508,
+          "f": 3.469995110753759,
+          "pg": 0.03215934974901197,
+          "elapsed_ms": 1114.2669389999999
+        }
+      ],
+      "restarts": [
+        {
+          "iteration": 3226,
+          "evaluations": 6042,
+          "f": 3.5070204821122863,
+          "pg": 0.022404000644030392,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3366,
+          "evaluations": 6316,
+          "f": 3.5063769819641073,
+          "pg": 0.03917816056515762,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3927,
+          "evaluations": 7570,
+          "f": 3.504897661640277,
+          "pg": 0.0266190834050073,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 4262,
+          "evaluations": 8283,
+          "f": 3.504162667186548,
+          "pg": 0.028579013552254257,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8271,
+          "evaluations": 16683,
+          "f": 3.4725196874179654,
+          "pg": 0.09599022358614694,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8442,
+          "evaluations": 17124,
+          "f": 3.4722556228092727,
+          "pg": 0.026390068633883355,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10026,
+          "evaluations": 20399,
+          "f": 3.469187401952621,
+          "pg": 0.06243243803124071,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11243,
+          "evaluations": 22983,
+          "f": 3.4671146275085625,
+          "pg": 0.010973432921308514,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11249,
+          "evaluations": 23018,
+          "f": 3.4671143918511698,
+          "pg": 0.003909594853338673,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11467,
+          "evaluations": 23536,
+          "f": 3.467048290331216,
+          "pg": 0.93293898281817,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 12584,
+          "evaluations": 25880,
+          "f": 3.4646068395024754,
+          "pg": 0.0281688172115679,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13427,
+          "evaluations": 27662,
+          "f": 3.4625709896660997,
+          "pg": 0.03076758525652734,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13530,
+          "evaluations": 27919,
+          "f": 3.4625053779986117,
+          "pg": 0.060265820454892184,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13597,
+          "evaluations": 28122,
+          "f": 3.462486564287667,
+          "pg": 0.021364480601654957,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 15549,
+          "evaluations": 32409,
+          "f": 3.4599200310813325,
+          "pg": 0.018360295473101557,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 15987,
+          "evaluations": 33475,
+          "f": 3.4594923355294025,
+          "pg": 0.012942435766986119,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 16136,
+          "evaluations": 33822,
+          "f": 3.45940855243115,
+          "pg": 0.03500613255856952,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17894,
+          "evaluations": 37761,
+          "f": 3.4579627241349993,
+          "pg": 0.011720229435254406,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18115,
+          "evaluations": 38249,
+          "f": 3.457882859140406,
+          "pg": 0.16232071650929694,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18456,
+          "evaluations": 38975,
+          "f": 3.4577341811513223,
+          "pg": 0.13677549812122786,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18616,
+          "evaluations": 39348,
+          "f": 3.4576870078233957,
+          "pg": 0.023701412484766173,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18660,
+          "evaluations": 39482,
+          "f": 3.4576824460502205,
+          "pg": 0.003383091081412901,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 19668,
+          "evaluations": 41654,
+          "f": 3.4567604255445974,
+          "pg": 0.07830450175476322,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 19985,
+          "evaluations": 42321,
+          "f": 3.4564916845187827,
+          "pg": 0.07376551549122981,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20267,
+          "evaluations": 42964,
+          "f": 3.4563763347989336,
+          "pg": 0.019543177405804107,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20821,
+          "evaluations": 44300,
+          "f": 3.456102769886308,
+          "pg": 0.008206666165287391,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20864,
+          "evaluations": 44431,
+          "f": 3.4560844440551883,
+          "pg": 0.010883315006987686,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21113,
+          "evaluations": 44954,
+          "f": 3.456024518469999,
+          "pg": 0.04689335013669784,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21399,
+          "evaluations": 45518,
+          "f": 3.455936642964723,
+          "pg": 0.04146665033902752,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22067,
+          "evaluations": 47085,
+          "f": 3.4556236307535935,
+          "pg": 0.1222244629836001,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22421,
+          "evaluations": 47850,
+          "f": 3.455463520909494,
+          "pg": 0.007120799960799137,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22962,
+          "evaluations": 49006,
+          "f": 3.4553092485438843,
+          "pg": 0.0267833597893452,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23126,
+          "evaluations": 49349,
+          "f": 3.455270047547,
+          "pg": 0.0072710121038361995,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23765,
+          "evaluations": 50782,
+          "f": 3.4549064208929865,
+          "pg": 0.026101126393486954,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23807,
+          "evaluations": 50901,
+          "f": 3.45488046181627,
+          "pg": 0.017577015926827366,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "terminal_search": [
+        {
+          "iteration": 23807,
+          "evaluations": 50921,
+          "f": 3.45488046181627,
+          "pg": 0.017577015926827366,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "dd_line_search_trials": 41,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-final-search-rust-raw-1-process.json",
+      "audit": "target/hermes-repro/runs/fix-final-search-rust-raw-1-dd-audit.json",
+      "stage": "final"
+    },
+    {
+      "case": "fix-final-search-rust-raw-2",
+      "backend": "rust-raw",
+      "variant": "baseline",
+      "binary_sha256": "cb3fddf8003cd73f44fbc4775473f4a4460d083c917082fe07289d50b1f1ccd0",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "55ba4faa2ba51a6176b86fc4aae68acd9d69e3813042db1878ffc7657fe21449",
+      "returncode": 0,
+      "warm": {
+        "backend": "rust-raw",
+        "elapsed_ms": 2709.213043,
+        "iterations": 23807,
+        "evaluations": 50921,
+        "status": "LineSearchFailed",
+        "objective": 3.45488046181627,
+        "projected_gradient_inf_norm": 0.017577015926827366
+      },
+      "warm_price_hash": "78764206ba855fca",
+      "process_wall_ms": 4797.348077001516,
+      "solve_wall_ms": 4314.309824999999,
+      "graph_stage_ms": {
+        "loss_integer_check": 22.150072,
+        "loss_model": 239.253075,
+        "loss_refinement": 875.122902,
+        "shared_legacy": 3005.6471939999997,
+        "total": 4171.266165
+      },
+      "dd_updates": 9,
+      "dd_status": "strict_and_gradient_satisfied",
+      "strict_acceptance_passed": true,
+      "bad_tokens": [],
+      "max_relative_flow_residual": "1.480333011670787191811167148109602697608103566154593357249284171244061409687488269467719890073402808E-11",
+      "scaled_gradient_max": "3.691506335996822044387690385803619303086160095628452032168254423239188098534791256383187718104199604E-27",
+      "floor_violations": 0,
+      "production_status": "no_admissible_candidate",
+      "kernel_counters": {
+        "accepted_curvature": 23807,
+        "all_free_subspace": 36,
+        "cauchy_segment": 42,
+        "failed_search_restart": 35,
+        "feasible_newton_shortcut": 23771,
+        "hessian_cache_rebuild": 37,
+        "hessian_product": 114,
+        "search_direction": 23808,
+        "subspace": 36,
+        "uniform_truncation": 36
+      },
+      "milestones": [
+        {
+          "threshold": 100,
+          "iteration": 7,
+          "evaluations": 12,
+          "f": 65.57682110282722,
+          "pg": 140.76696723603095,
+          "elapsed_ms": 0.981705
+        },
+        {
+          "threshold": 10,
+          "iteration": 26,
+          "evaluations": 39,
+          "f": 9.707078983698162,
+          "pg": 28.69074934426703,
+          "elapsed_ms": 3.456541
+        },
+        {
+          "threshold": 4,
+          "iteration": 52,
+          "evaluations": 69,
+          "f": 3.995981766072524,
+          "pg": 8.197284276382568,
+          "elapsed_ms": 6.306407
+        },
+        {
+          "threshold": 3.73,
+          "iteration": 171,
+          "evaluations": 258,
+          "f": 3.729696414273946,
+          "pg": 0.5333329851920678,
+          "elapsed_ms": 18.350878
+        },
+        {
+          "threshold": 3.62,
+          "iteration": 803,
+          "evaluations": 1399,
+          "f": 3.6199874719664833,
+          "pg": 0.2986208637759323,
+          "elapsed_ms": 86.46061300000001
+        },
+        {
+          "threshold": 3.5,
+          "iteration": 5133,
+          "evaluations": 10050,
+          "f": 3.4999980747427504,
+          "pg": 0.10913998109100834,
+          "elapsed_ms": 564.191377
+        },
+        {
+          "threshold": 3.47,
+          "iteration": 9643,
+          "evaluations": 19508,
+          "f": 3.469995110753759,
+          "pg": 0.03215934974901197,
+          "elapsed_ms": 1076.61147
+        }
+      ],
+      "restarts": [
+        {
+          "iteration": 3226,
+          "evaluations": 6042,
+          "f": 3.5070204821122863,
+          "pg": 0.022404000644030392,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3366,
+          "evaluations": 6316,
+          "f": 3.5063769819641073,
+          "pg": 0.03917816056515762,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 3927,
+          "evaluations": 7570,
+          "f": 3.504897661640277,
+          "pg": 0.0266190834050073,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 4262,
+          "evaluations": 8283,
+          "f": 3.504162667186548,
+          "pg": 0.028579013552254257,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8271,
+          "evaluations": 16683,
+          "f": 3.4725196874179654,
+          "pg": 0.09599022358614694,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 8442,
+          "evaluations": 17124,
+          "f": 3.4722556228092727,
+          "pg": 0.026390068633883355,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 10026,
+          "evaluations": 20399,
+          "f": 3.469187401952621,
+          "pg": 0.06243243803124071,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11243,
+          "evaluations": 22983,
+          "f": 3.4671146275085625,
+          "pg": 0.010973432921308514,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11249,
+          "evaluations": 23018,
+          "f": 3.4671143918511698,
+          "pg": 0.003909594853338673,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 11467,
+          "evaluations": 23536,
+          "f": 3.467048290331216,
+          "pg": 0.93293898281817,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 12584,
+          "evaluations": 25880,
+          "f": 3.4646068395024754,
+          "pg": 0.0281688172115679,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13427,
+          "evaluations": 27662,
+          "f": 3.4625709896660997,
+          "pg": 0.03076758525652734,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13530,
+          "evaluations": 27919,
+          "f": 3.4625053779986117,
+          "pg": 0.060265820454892184,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 13597,
+          "evaluations": 28122,
+          "f": 3.462486564287667,
+          "pg": 0.021364480601654957,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 15549,
+          "evaluations": 32409,
+          "f": 3.4599200310813325,
+          "pg": 0.018360295473101557,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 15987,
+          "evaluations": 33475,
+          "f": 3.4594923355294025,
+          "pg": 0.012942435766986119,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 16136,
+          "evaluations": 33822,
+          "f": 3.45940855243115,
+          "pg": 0.03500613255856952,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 17894,
+          "evaluations": 37761,
+          "f": 3.4579627241349993,
+          "pg": 0.011720229435254406,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18115,
+          "evaluations": 38249,
+          "f": 3.457882859140406,
+          "pg": 0.16232071650929694,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18456,
+          "evaluations": 38975,
+          "f": 3.4577341811513223,
+          "pg": 0.13677549812122786,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18616,
+          "evaluations": 39348,
+          "f": 3.4576870078233957,
+          "pg": 0.023701412484766173,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 18660,
+          "evaluations": 39482,
+          "f": 3.4576824460502205,
+          "pg": 0.003383091081412901,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 19668,
+          "evaluations": 41654,
+          "f": 3.4567604255445974,
+          "pg": 0.07830450175476322,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 19985,
+          "evaluations": 42321,
+          "f": 3.4564916845187827,
+          "pg": 0.07376551549122981,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20267,
+          "evaluations": 42964,
+          "f": 3.4563763347989336,
+          "pg": 0.019543177405804107,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20821,
+          "evaluations": 44300,
+          "f": 3.456102769886308,
+          "pg": 0.008206666165287391,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 20864,
+          "evaluations": 44431,
+          "f": 3.4560844440551883,
+          "pg": 0.010883315006987686,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21113,
+          "evaluations": 44954,
+          "f": 3.456024518469999,
+          "pg": 0.04689335013669784,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 21399,
+          "evaluations": 45518,
+          "f": 3.455936642964723,
+          "pg": 0.04146665033902752,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22067,
+          "evaluations": 47085,
+          "f": 3.4556236307535935,
+          "pg": 0.1222244629836001,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22421,
+          "evaluations": 47850,
+          "f": 3.455463520909494,
+          "pg": 0.007120799960799137,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 22962,
+          "evaluations": 49006,
+          "f": 3.4553092485438843,
+          "pg": 0.0267833597893452,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23126,
+          "evaluations": 49349,
+          "f": 3.455270047547,
+          "pg": 0.0072710121038361995,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23765,
+          "evaluations": 50782,
+          "f": 3.4549064208929865,
+          "pg": 0.026101126393486954,
+          "reason": "Some(TrialLimit)"
+        },
+        {
+          "iteration": 23807,
+          "evaluations": 50901,
+          "f": 3.45488046181627,
+          "pg": 0.017577015926827366,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "terminal_search": [
+        {
+          "iteration": 23807,
+          "evaluations": 50921,
+          "f": 3.45488046181627,
+          "pg": 0.017577015926827366,
+          "reason": "Some(TrialLimit)"
+        }
+      ],
+      "dd_line_search_trials": 41,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-final-search-rust-raw-2-process.json",
+      "audit": "target/hermes-repro/runs/fix-final-search-rust-raw-2-dd-audit.json",
+      "stage": "final"
+    },
+    {
+      "case": "fix-final-search-rust-preprocessed-0",
+      "backend": "rust-preprocessed",
+      "variant": "baseline",
+      "binary_sha256": "cb3fddf8003cd73f44fbc4775473f4a4460d083c917082fe07289d50b1f1ccd0",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "7399b3b3354e1bcac5ac83c3908e7cb8d1c55608843be52e25b937efb478c22b",
+      "returncode": 1,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "elapsed_ms": 381.657309,
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2027,
+        "evaluations": 35368,
+        "restarts": 9,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.44163886621118,
+        "original_final_objective": 3.4416388662111785,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.23685711096453574,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2578808,
+        "dd_curvature_calls": 19880,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "process_wall_ms": 2290.572180005256,
+      "solve_wall_ms": 1841.424764,
+      "graph_stage_ms": null,
+      "dd_updates": 32,
+      "dd_status": "iteration_limit",
+      "strict_acceptance_passed": false,
+      "bad_tokens": [
+        264
+      ],
+      "max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "scaled_gradient_max": "3.025707948214682604804803924648927868838381914127111703858830652510253286432460651667876044843268282E-20",
+      "floor_violations": 0,
+      "production_status": null,
+      "kernel_counters": {
+        "accepted_curvature": 2016,
+        "all_free_subspace": 88,
+        "cauchy_segment": 100,
+        "feasible_newton_shortcut": 1919,
+        "hessian_cache_rebuild": 97,
+        "hessian_product": 276,
+        "search_direction": 2016,
+        "subspace": 88,
+        "uniform_truncation": 88,
+        "failed_search_restart": 2
+      },
+      "milestones": [],
+      "restarts": [],
+      "terminal_search": [],
+      "dd_line_search_trials": 1107,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-final-search-rust-preprocessed-0-process.json",
+      "audit": "target/hermes-repro/runs/fix-final-search-rust-preprocessed-0-dd-audit.json",
+      "stage": "final"
+    },
+    {
+      "case": "fix-final-search-rust-preprocessed-1",
+      "backend": "rust-preprocessed",
+      "variant": "baseline",
+      "binary_sha256": "cb3fddf8003cd73f44fbc4775473f4a4460d083c917082fe07289d50b1f1ccd0",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "7399b3b3354e1bcac5ac83c3908e7cb8d1c55608843be52e25b937efb478c22b",
+      "returncode": 1,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "elapsed_ms": 408.287504,
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2027,
+        "evaluations": 35368,
+        "restarts": 9,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.44163886621118,
+        "original_final_objective": 3.4416388662111785,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.23685711096453574,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2578808,
+        "dd_curvature_calls": 19880,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "process_wall_ms": 2389.911967969965,
+      "solve_wall_ms": 1945.5537029999998,
+      "graph_stage_ms": null,
+      "dd_updates": 32,
+      "dd_status": "iteration_limit",
+      "strict_acceptance_passed": false,
+      "bad_tokens": [
+        264
+      ],
+      "max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "scaled_gradient_max": "3.025707948214682604804803924648927868838381914127111703858830652510253286432460651667876044843268282E-20",
+      "floor_violations": 0,
+      "production_status": null,
+      "kernel_counters": {
+        "accepted_curvature": 2016,
+        "all_free_subspace": 88,
+        "cauchy_segment": 100,
+        "feasible_newton_shortcut": 1919,
+        "hessian_cache_rebuild": 97,
+        "hessian_product": 276,
+        "search_direction": 2016,
+        "subspace": 88,
+        "uniform_truncation": 88,
+        "failed_search_restart": 2
+      },
+      "milestones": [],
+      "restarts": [],
+      "terminal_search": [],
+      "dd_line_search_trials": 1107,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-final-search-rust-preprocessed-1-process.json",
+      "audit": "target/hermes-repro/runs/fix-final-search-rust-preprocessed-1-dd-audit.json",
+      "stage": "final"
+    },
+    {
+      "case": "fix-final-search-rust-preprocessed-2",
+      "backend": "rust-preprocessed",
+      "variant": "baseline",
+      "binary_sha256": "cb3fddf8003cd73f44fbc4775473f4a4460d083c917082fe07289d50b1f1ccd0",
+      "callback_trace": false,
+      "warm_iterations_cap": null,
+      "audit_sha256": "7399b3b3354e1bcac5ac83c3908e7cb8d1c55608843be52e25b937efb478c22b",
+      "returncode": 1,
+      "warm": {
+        "backend": "local minimize-only routing adapter",
+        "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+        "elapsed_ms": 392.493923,
+        "status": "ConvergedFunctionReduction",
+        "assessment": "Approximate",
+        "upstream_usable": true,
+        "line_search_failure": null,
+        "iterations": 2027,
+        "evaluations": 35368,
+        "restarts": 9,
+        "optimizer_variables": 606,
+        "optimization_blocks": 267,
+        "tokens": 607,
+        "markets": 994,
+        "objective": 3.44163886621118,
+        "original_final_objective": 3.4416388662111785,
+        "max_projected_gradient": 15577688.89453125,
+        "max_kkt_residual_ratio": 0.23685711096453574,
+        "max_deficit_ratio": 0.23685711096453574,
+        "objective_scale": 1,
+        "bounds_unchanged": true,
+        "original_trade_and_turnover_finite": true,
+        "market_evaluate_calls_including_adapter_verification": 2578808,
+        "dd_curvature_calls": 19880,
+        "unknown_curvature_calls": 0,
+        "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+      },
+      "warm_price_hash": "3235a1ae2a6232ca",
+      "process_wall_ms": 2339.974324044306,
+      "solve_wall_ms": 1869.916969,
+      "graph_stage_ms": null,
+      "dd_updates": 32,
+      "dd_status": "iteration_limit",
+      "strict_acceptance_passed": false,
+      "bad_tokens": [
+        264
+      ],
+      "max_relative_flow_residual": "5.719832652059350344255075124758073668821098120636200091300559963834504896737560538060936911938137932E-9",
+      "scaled_gradient_max": "3.025707948214682604804803924648927868838381914127111703858830652510253286432460651667876044843268282E-20",
+      "floor_violations": 0,
+      "production_status": null,
+      "kernel_counters": {
+        "accepted_curvature": 2016,
+        "all_free_subspace": 88,
+        "cauchy_segment": 100,
+        "feasible_newton_shortcut": 1919,
+        "hessian_cache_rebuild": 97,
+        "hessian_product": 276,
+        "search_direction": 2016,
+        "subspace": 88,
+        "uniform_truncation": 88,
+        "failed_search_restart": 2
+      },
+      "milestones": [],
+      "restarts": [],
+      "terminal_search": [],
+      "dd_line_search_trials": 1107,
+      "dd_budget_progress": [],
+      "receipt": "target/hermes-repro/runs/fix-final-search-rust-preprocessed-2-process.json",
+      "audit": "target/hermes-repro/runs/fix-final-search-rust-preprocessed-2-dd-audit.json",
+      "stage": "final"
+    }
+  ],
+  "warning": "Do not compare total time to unlike terminal objectives as convergence speed. Rejected candidates are preserved but are not the final implementation."
+}
