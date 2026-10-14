@@ -52,6 +52,19 @@ impl Default for SolveOptions {
     }
 }
 
+impl SolveOptions {
+    /// Bound a diagnostic warm solve before handing its prices to a stricter
+    /// downstream solver (for example DD). Preserve all economic tolerances,
+    /// bounds and optimizer settings, and never enlarge a caller's budget.
+    /// Budget exhaustion or stagnation is not economic acceptance: callers may
+    /// reuse the returned prices, but must independently verify the final solve.
+    pub fn with_warm_start_budget(mut self) -> Self {
+        self.optimizer.max_iterations = self.optimizer.max_iterations.min(2000);
+        self.optimizer.max_evaluations = self.optimizer.max_evaluations.min(2000);
+        self
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SolveAssessment {
     Converged,
@@ -231,7 +244,11 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
     let mut line_search_failure = None;
     let mut scale = initial.clone();
     let mut pgtol = options.optimizer.pgtol;
-    let mut zero_progress_restarts = 0;
+    let mut progress = ResidualProgress::new(
+        (0..route.tokens)
+            .map(|i| token_residual_ratio(i, &price, &first, &math_lower, &math_upper, &options)),
+    );
+    let mut numerical_stagnation = false;
     // Probe/solver/verification costs share a single hard evaluation budget.
     drop(evaluate);
     let mut current = first;
@@ -331,9 +348,8 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         })?;
         evaluations += result.evaluations;
         iterations += result.iterations;
-        let next_price = physical_price(&result.x, &block.tokens, &price, &scale, &lower, &upper);
-        let unchanged = next_price == price;
-        price = next_price;
+        let before_round = price.clone();
+        price = physical_price(&result.x, &block.tokens, &price, &scale, &lower, &upper);
         status = result.status;
         line_search_failure = result.line_search_failure;
         current = route.evaluate(&price);
@@ -392,21 +408,23 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
                 status = Status::MaxEvaluations;
                 break;
             }
-            if price != before {
-                zero_progress_restarts = 0;
-                restarts += 1;
-                continue;
-            }
         }
-        if result.iterations == 0 {
-            zero_progress_restarts += 1;
-        } else {
-            zero_progress_restarts = 0;
+        // Assess the complete optimizer + recovery round. Neither a lower
+        // objective nor a changed price/positive iteration count proves that
+        // an economically violating token made meaningful progress.
+        if progress.stagnated(
+            (0..route.tokens).map(|i| {
+                token_residual_ratio(i, &price, &current, &math_lower, &math_upper, &options)
+            }),
+        ) {
+            numerical_stagnation = true;
+            break;
         }
         if status == Status::MaxEvaluations
-            || (status == Status::LineSearchFailed && result.iterations == 0)
-            || (unchanged && status != Status::ConvergedProjectedGradient)
-            || zero_progress_restarts >= 8
+            || (status == Status::LineSearchFailed
+                && result.iterations == 0
+                && price == before_round)
+            || (price == before_round && status != Status::ConvergedProjectedGradient)
         {
             break;
         }
@@ -436,6 +454,8 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         } else {
             SolveAssessment::Approximate
         }
+    } else if numerical_stagnation {
+        SolveAssessment::NumericalStagnation
     } else if matches!(status, Status::MaxIterations | Status::MaxEvaluations) {
         SolveAssessment::BudgetExhausted
     } else if matches!(
@@ -554,6 +574,53 @@ fn optimization_blocks<U: UtilityConjugate, M: Market>(
     blocks
 }
 
+// A per-token high-water mark prevents oscillation or rotating the worst token
+// from resetting the watchdog. Ratios below acceptance are all equivalent.
+// Tiny reductions accumulate against the last meaningful mark (0.1%).
+struct ResidualProgress {
+    best: Vec<f64>,
+    stagnant_rounds: usize,
+}
+
+impl ResidualProgress {
+    fn new(ratios: impl Iterator<Item = f64>) -> Self {
+        Self {
+            best: ratios.map(|r| r.max(1.0)).collect(),
+            stagnant_rounds: 0,
+        }
+    }
+
+    fn stagnated(&mut self, ratios: impl Iterator<Item = f64>) -> bool {
+        let mut improved = false;
+        for (best, ratio) in self.best.iter_mut().zip(ratios) {
+            let ratio = ratio.max(1.0);
+            if ratio < *best && (ratio <= 1.0 || ratio <= *best * (1.0 - 1e-3)) {
+                *best = ratio;
+                improved = true;
+            }
+        }
+        self.stagnant_rounds = if improved {
+            0
+        } else {
+            self.stagnant_rounds + 1
+        };
+        self.stagnant_rounds >= 8
+    }
+}
+
+fn token_residual_ratio(
+    i: usize,
+    price: &Array1<f64>,
+    current: &RouteEvaluation,
+    lower: &Array1<f64>,
+    upper: &Array1<f64>,
+    options: &SolveOptions,
+) -> f64 {
+    let allowance = options.absolute_residual_value
+        + options.relative_residual_tolerance * current.turnover[i] * price[i];
+    kkt_gradient(price[i], current.gradient[i], lower[i], upper[i]).abs() * price[i] / allowance
+}
+
 fn block_residual(
     block: &OptimizationBlock,
     price: &Array1<f64>,
@@ -565,12 +632,7 @@ fn block_residual(
     block
         .tokens
         .iter()
-        .map(|&i| {
-            let allowance = options.absolute_residual_value
-                + options.relative_residual_tolerance * current.turnover[i] * price[i];
-            kkt_gradient(price[i], current.gradient[i], lower[i], upper[i]).abs() * price[i]
-                / allowance
-        })
+        .map(|&i| token_residual_ratio(i, price, current, lower, upper, options))
         .fold(0.0, f64::max)
 }
 
@@ -935,6 +997,42 @@ mod tests {
     use super::*;
     use crate::{market::UniswapV2, utility::NonnegativeLinear};
     use ndarray::arr1;
+
+    #[test]
+    fn residual_watchdog_ignores_tiny_changes_and_accepted_tokens() {
+        let mut progress = ResidualProgress::new([4986.0, 0.8].into_iter());
+        for round in 1..=8 {
+            assert_eq!(
+                progress.stagnated([4986.0 - round as f64 * 1e-8, 0.8 / round as f64].into_iter()),
+                round == 8
+            );
+        }
+    }
+
+    #[test]
+    fn residual_watchdog_tracks_each_token_and_does_not_reward_oscillation() {
+        let mut progress = ResidualProgress::new([5000.0, 100.0].into_iter());
+        for _ in 0..7 {
+            assert!(!progress.stagnated([5000.0, 100.0].into_iter()));
+        }
+        // The worst token is unchanged; progress on another violating token counts.
+        assert!(!progress.stagnated([5000.0, 90.0].into_iter()));
+        for round in 1..=8 {
+            let ratio = if round % 2 == 0 { 90.0 } else { 100.0 };
+            assert_eq!(progress.stagnated([5000.0, ratio].into_iter()), round == 8);
+        }
+    }
+
+    #[test]
+    fn residual_watchdog_accumulates_small_improvements_and_accepts_boundary() {
+        let mut progress = ResidualProgress::new([100.0, 1.00001].into_iter());
+        for round in 1..=7 {
+            assert!(!progress.stagnated([100.0 - round as f64 * 0.02, 1.00001].into_iter()));
+        }
+        assert_eq!(progress.stagnant_rounds, 2);
+        assert!(!progress.stagnated([99.86, 1.0].into_iter()));
+        assert_eq!(progress.stagnant_rounds, 0);
+    }
 
     #[test]
     fn block_kernel_is_the_original_centered_objective_and_gradient() {
