@@ -129,6 +129,24 @@ impl<T: Float> LbfgsMemory<T> {
         out
     }
 
+    /// O(m) diagonal of the symmetric rank-two model after the shared lazy rebuild.
+    /// Divide before multiplying: squaring a finite y_i or (B s)_i can overflow.
+    pub(crate) fn hessian_diagonal_at(&self, i: usize) -> T {
+        let cache = self
+            .hessian_cache
+            .get_or_init(|| self.build_hessian_cache());
+        let mut diagonal = self.theta;
+        for (pair, update) in self.pairs.iter().zip(cache) {
+            if update.sbs > T::zero() {
+                diagonal = diagonal - (update.bs[i] / update.sbs) * update.bs[i];
+            }
+            if pair.ys > T::zero() {
+                diagonal = diagonal + (pair.y[i] / pair.ys) * pair.y[i];
+            }
+        }
+        diagonal
+    }
+
     /// Solve B_FF step_F = rhs_F with a matrix of order at most 2m.
     /// Reject unreliable compact solves so the caller can use the CG safeguard.
     pub(crate) fn solve_reduced(&self, rhs: &[T], free: &[usize]) -> Option<Vec<T>> {

@@ -217,8 +217,14 @@ where
         // Restart only if there was curvature history to discard. With no history,
         // repeating the same steepest search only wastes the evaluation budget.
         if search.step.is_none() && !search.evaluation_limit && !memory.is_empty() {
+            let diagonal = if search.failure == Some(LineSearchFailure::NumericalStagnation) {
+                rounded_diagonal_direction(&x, &gradient, &bounds, &variables, &memory)
+            } else {
+                None
+            };
             memory.clear();
-            let mut fallback = projected_steepest_direction(&x, &gradient, &bounds);
+            let mut fallback =
+                diagonal.unwrap_or_else(|| projected_steepest_direction(&x, &gradient, &bounds));
             safeguard_steepest_direction(&x, &gradient, &bounds, &mut fallback);
             search = strong_wolfe(
                 &x,
@@ -370,7 +376,30 @@ fn search_direction<T: Float>(
         subspace_minimize(x, gradient, &cauchy, bounds, memory)
     };
     let direction = sub(&target, x);
-    if norm_inf(&direction) > T::zero() {
+    let direction_norm = norm_inf(&direction);
+    if memory.is_empty() && direction_norm > T::one() {
+        let mut steepest = projected_steepest_direction(x, gradient, bounds);
+        let gradient_norm = norm_inf(&steepest);
+        if gradient_norm > T::one() {
+            // The identity model can clip a high-gradient coordinate at its bound
+            // while leaving an enormous free displacement. Unit displacement
+            // limiting can suppress that coordinate to roundoff and follow an almost
+            // orthogonal ray. Compare in scaled units so neither dot overflows.
+            let slope = gradient
+                .iter()
+                .zip(&direction)
+                .filter(|(_, d)| **d != T::zero())
+                .fold(T::zero(), |sum, (&g, &d)| {
+                    sum + (g / gradient_norm) * (d / direction_norm)
+                });
+            let roundoff = T::epsilon() * T::from(32.).unwrap();
+            if slope.is_finite() && slope >= -roundoff {
+                safeguard_steepest_direction(x, gradient, bounds, &mut steepest);
+                return steepest;
+            }
+        }
+    }
+    if direction_norm > T::zero() {
         direction
     } else {
         let mut fallback = projected_steepest_direction(x, gradient, bounds);
@@ -397,6 +426,39 @@ fn safeguard_steepest_direction<T: Float>(
     safeguard_direction(direction, gradient, normalize);
 }
 
+// Near a floating-point lattice point, a steepest ray can move high-curvature
+// coordinates by one harmful ULP before moving a weak-curvature coordinate at
+// all. Before discarding a stalled model, retain its positive diagonal scaling
+// and use the actual rounded displacement. This only proposes the one existing
+// restart ray; it neither accepts an unchecked point nor spends extra FG calls.
+fn rounded_diagonal_direction<T: Float>(
+    x: &[T],
+    gradient: &[T],
+    bounds: &[Bound<T>],
+    variables: &[usize],
+    memory: &LbfgsMemory<T>,
+) -> Option<Vec<T>> {
+    let mut direction = vec![T::zero(); x.len()];
+    for (j, &i) in variables.iter().enumerate() {
+        if (gradient[i] > T::zero() && bounds[i].is_at_lower(x[i]))
+            || (gradient[i] < T::zero() && bounds[i].is_at_upper(x[i]))
+            || gradient[i] == T::zero()
+        {
+            continue;
+        }
+        let diagonal = memory.hessian_diagonal_at(j);
+        if !diagonal.is_finite() || diagonal <= T::zero() {
+            return None;
+        }
+        let target = x[i] - gradient[i] / diagonal;
+        if !target.is_finite() {
+            return None;
+        }
+        direction[i] = bounds[i].project(target) - x[i];
+    }
+    is_descent_direction(gradient, &direction).then_some(direction)
+}
+
 fn is_descent_direction<T: Float>(gradient: &[T], direction: &[T]) -> bool {
     let derivative = dot(gradient, direction);
     derivative.is_finite() && derivative < T::zero()
@@ -411,7 +473,13 @@ fn safeguard_direction<T: Float>(direction: &mut [T], gradient: &[T], normalize:
     let norm = norm_inf(direction);
     if norm.is_finite()
         && norm > T::zero()
-        && (normalize || !is_descent_direction(gradient, direction))
+        && (normalize
+            || !is_descent_direction(gradient, direction)
+            // A finite initial dot can still leave no exponent headroom for
+            // trial slopes. Reparameterize an excessive ray before zoom sees
+            // infinite endpoint derivatives from otherwise finite callbacks.
+            || (norm > T::one()
+                && dot(gradient, direction).abs() > T::max_value().sqrt()))
     {
         for d in direction.iter_mut() {
             *d = *d / norm;
@@ -508,6 +576,132 @@ mod tests {
         let direction = search_direction(&[1e-300], &[1e50], &[Bound::both(-1., 1.)], &memory);
         assert_eq!(direction, [-1.]);
         assert!(memory.hessian_cache_is_initialized());
+    }
+
+    fn check_empty_model_clipping<T: Float + std::fmt::Debug>(exponent: i32) {
+        let c = |v| T::from(v).unwrap();
+        let scale = c(2_f64.powi(exponent));
+        for sign in [-T::one(), T::one()] {
+            for swap in [false, true] {
+                let mut x = vec![sign * c(0.5), sign * c(3.)];
+                let mut gradient = vec![-sign * scale, sign * (scale * T::epsilon())];
+                let mut bounds = vec![
+                    if sign > T::zero() {
+                        Bound::upper(c(0.875))
+                    } else {
+                        Bound::lower(c(-0.875))
+                    },
+                    Bound::unbounded(),
+                ];
+                if swap {
+                    x.reverse();
+                    gradient.reverse();
+                    bounds.reverse();
+                }
+                let mut direction = search_direction(&x, &gradient, &bounds, &LbfgsMemory::new(1));
+                assert!(is_descent_direction(&gradient, &direction), "{direction:?}");
+                if swap {
+                    direction.reverse();
+                }
+                assert!(sign * direction[0] > c(0.5), "{direction:?}");
+                assert!(direction[1].abs() <= T::epsilon(), "{direction:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn empty_identity_model_must_not_erase_bounded_descent_f32() {
+        check_empty_model_clipping::<f32>(60);
+    }
+
+    #[test]
+    fn empty_identity_model_must_not_erase_bounded_descent_f64() {
+        check_empty_model_clipping::<f64>(100);
+    }
+
+    #[test]
+    fn finite_excessive_slopes_are_reparameterized_before_trials() {
+        let mut d32 = [-2_f32.powi(30)];
+        let g32 = [2_f32.powi(60)];
+        assert!(dot(&g32, &d32).is_finite());
+        safeguard_direction(&mut d32, &g32, false);
+        assert_eq!(d32, [-1.]);
+        let mut d64 = [-2_f64.powi(300)];
+        let g64 = [2_f64.powi(600)];
+        assert!(dot(&g64, &d64).is_finite());
+        safeguard_direction(&mut d64, &g64, false);
+        assert_eq!(d64, [-1.]);
+    }
+
+    fn check_diagonal<T: Float + std::fmt::Debug>() {
+        let c = |v| T::from(v).unwrap();
+        let mut memory = LbfgsMemory::new(3);
+        for k in 0..12 {
+            let s: Vec<_> = (0..5)
+                .map(|i| c(((k + i * 3) % 7) as f64 - 3.) / c(4.))
+                .collect();
+            let sum = s.iter().copied().fold(T::zero(), |a, b| a + b);
+            let y: Vec<_> = s
+                .iter()
+                .enumerate()
+                .map(|(i, s)| c((i + 1) as f64) * *s + sum / c(16.))
+                .collect();
+            assert!(memory.push(s, y));
+            for i in 0..5 {
+                let mut basis = vec![T::zero(); 5];
+                basis[i] = T::one();
+                let reference = memory.hessian_product(&basis)[i];
+                let diagonal = memory.hessian_diagonal_at(i);
+                let error = (diagonal - reference).abs();
+                assert!(
+                    error <= c(64.) * T::epsilon() * reference.abs().max(T::one()),
+                    "{diagonal:?} vs {reference:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cached_diagonal_tracks_hessian_products_across_history_eviction() {
+        check_diagonal::<f32>();
+        check_diagonal::<f64>();
+    }
+
+    #[test]
+    fn diagonal_restart_uses_reduced_model_indices_and_keeps_fixed_coordinates() {
+        let memory = model();
+        let bounds = [
+            Bound::both(-2., 2.),
+            Bound::both(1., 1.),
+            Bound::both(-2., 2.),
+        ];
+        let direction =
+            rounded_diagonal_direction(&[0., 1., 0.], &[1., 1e200, 2.], &bounds, &[0, 2], &memory)
+                .unwrap();
+        assert!((direction[0] + 1.).abs() < 1e-12);
+        assert_eq!(direction[1], 0.);
+        assert!((direction[2] + 2. / 9.).abs() < 1e-12);
+        assert!(
+            rounded_diagonal_direction(
+                &[-2., 1., -2.],
+                &[1., 1e200, 2.],
+                &bounds,
+                &[0, 2],
+                &memory
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn ordinary_empty_identity_model_keeps_its_original_displacement() {
+        let direction = search_direction(
+            &[0.5, 0.],
+            &[-1., 0.25],
+            &[Bound::upper(0.875), Bound::unbounded()],
+            &LbfgsMemory::new(1),
+        );
+        assert_eq!(direction, [0.375, -0.25]);
     }
 
     #[test]

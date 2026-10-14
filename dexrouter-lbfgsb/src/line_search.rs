@@ -225,7 +225,15 @@ where
                     step,
                     eval.f,
                     derphi,
-                ) {
+                )
+                .or_else(|| {
+                    // Three same-side samples must corroborate this distant root.
+                    // The two-point fast path can lose its integral test to function
+                    // roundoff when curvature is small but still well resolved.
+                    local_prediction.filter(|&root| {
+                        derphi.abs() >= cast::<T>(0.66) * derphi0.abs() && root > step
+                    })
+                }) {
                     let predicted = predicted.min(step_max);
                     if (!next.is_finite() || predicted > next)
                         && x0
