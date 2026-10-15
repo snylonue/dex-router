@@ -262,11 +262,29 @@ fn pcg<H: Hessian>(
         .zip(free)
         .map(|(&g, &free)| if free { -g } else { 0.0 })
         .collect();
-    let mut z: Vec<_> = r
-        .iter()
-        .zip(metric)
-        .map(|(&r, &d)| (r / d) / (1.0 + damping))
-        .collect();
+    let preconditioner = h.preconditioner(metric, free, damping)?;
+    let precondition = |r: &[f64], z: &mut [f64]| -> anyhow::Result<()> {
+        if let Some(p) = &preconditioner {
+            z.fill(f64::NAN);
+            p.apply(r, z)?;
+            anyhow::ensure!(
+                z.iter().all(|v| v.is_finite()),
+                "nonfinite preconditioner product"
+            );
+            for i in 0..n {
+                if !free[i] {
+                    z[i] = 0.0;
+                }
+            }
+        } else {
+            for i in 0..n {
+                z[i] = (r[i] / metric[i]) / (1.0 + damping);
+            }
+        }
+        Ok(())
+    };
+    let mut z = vec![0.0; n];
+    precondition(&r, &mut z)?;
     let mut direction = z.clone();
     let mut rz = dot(&r, &z);
     let initial = rz;
@@ -335,9 +353,7 @@ fn pcg<H: Hessian>(
         }
         x = candidate;
         r = residual;
-        for i in 0..n {
-            z[i] = (r[i] / metric[i]) / (1.0 + damping);
-        }
+        precondition(&r, &mut z)?;
         let next = dot(&r, &z);
         if !next.is_finite() || next < 0.0 {
             return Ok(Cg::Direction(x, true));

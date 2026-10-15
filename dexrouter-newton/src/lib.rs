@@ -24,6 +24,12 @@ impl Bound {
     }
 }
 
+/// A fixed symmetric positive-definite inverse metric for one PCG solve.
+/// Write every component. This changes only the linear solver, not the objective.
+pub trait Preconditioner {
+    fn apply(&self, residual: &[f64], solution: &mut [f64]) -> anyhow::Result<()>;
+}
+
 /// A symmetric local Hessian, constructed once per outer iteration. Products
 /// must write every component, including fixed coordinates. The solver masks
 /// fixed/active directions before calling apply. No dense matrix is required.
@@ -35,6 +41,18 @@ pub trait Hessian {
     fn diagonal(&self, diagonal: &mut [f64]) -> anyhow::Result<()> {
         diagonal.fill(1.0);
         Ok(())
+    }
+    /// Optionally build a fixed SPD preconditioner for H_FF + damping*D_FF.
+    /// metric is the solver's positive Jacobi D, and free is the active mask.
+    /// None retains the original Jacobi arithmetic; construction uses no HVPs.
+    /// Errors and nonfinite custom products are not silently ignored.
+    fn preconditioner(
+        &self,
+        _metric: &[f64],
+        _free: &[bool],
+        _damping: f64,
+    ) -> anyhow::Result<Option<Box<dyn Preconditioner>>> {
+        Ok(None)
     }
 }
 
