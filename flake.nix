@@ -31,9 +31,20 @@
             };
             devShells.default = pkgs.mkShell {
               packages = [
+                pkgs.cargo
+                pkgs.rustc
+                pkgs.rustfmt
+                pkgs.clippy
+                pkgs.rust-analyzer
                 pkgs.foundry
                 pkgs.graphviz
               ];
+              # Keep Cargo, compiler and linker wrappers on the locked Nix toolchain.
+              RUSTC = "${pkgs.rustc}/bin/rustc";
+              RUSTDOC = "${pkgs.rustc}/bin/rustdoc";
+              # Use the sccache installed on the host.
+              RUSTC_WRAPPER = "sccache";
+              RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
                 with pkgs;
                 [
