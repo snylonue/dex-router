@@ -6,6 +6,12 @@ use ndarray::Array1;
 pub struct Utility<T>(pub T);
 
 pub trait UtilityConjugate {
+    /// Promise convexity of value(z^2) on the positive, box-constrained domain.
+    /// Unknown or signed utilities must keep the default false.
+    fn convex_in_sqrt_prices(&self) -> bool {
+        false
+    }
+
     fn value(&self, v: &Array1<f64>) -> f64;
 
     fn grad(&self, v: &Array1<f64>) -> Array1<f64>;
@@ -78,6 +84,10 @@ impl NonnegativeLinear {
 }
 
 impl UtilityConjugate for NonnegativeLinear {
+    fn convex_in_sqrt_prices(&self) -> bool {
+        true
+    }
+
     fn is_constant_coordinate(&self, _index: usize) -> bool {
         true
     }
@@ -125,6 +135,10 @@ pub struct BasketLiquidation {
 }
 
 impl UtilityConjugate for BasketLiquidation {
+    fn convex_in_sqrt_prices(&self) -> bool {
+        self.inputs.iter().all(|v| v.is_finite() && *v >= 0.0)
+    }
+
     fn is_constant_coordinate(&self, index: usize) -> bool {
         index == self.out || self.inputs[index] == 0.0
     }

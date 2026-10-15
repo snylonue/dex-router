@@ -120,7 +120,7 @@ impl<U: UtilityConjugate, M: Market> Gradient for Route<U, M> {
 mod solver;
 pub use solver::{
     SolveAssessment, SolveDiagnostics, SolveOptions, solve_price, solve_price_with_init_p,
-    solve_price_with_init_p_checked, solve_price_with_options,
+    solve_price_with_init_p_checked, solve_price_with_newton, solve_price_with_options,
 };
 
 #[cfg(test)]

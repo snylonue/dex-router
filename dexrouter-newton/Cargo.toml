@@ -1,0 +1,12 @@
+[package]
+name = "dexrouter-newton"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+
+[dev-dependencies]
+argmin.workspace = true
+argmin-math = { version = "0.5", features = ["vec"] }
+dexrouter-lbfgsb = { path = "../dexrouter-lbfgsb" }

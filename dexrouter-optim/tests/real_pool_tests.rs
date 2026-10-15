@@ -135,3 +135,40 @@ fn diagnose_full_market_price_precision() {
         }
     }
 }
+
+#[test]
+#[ignore = "offline solver ablation; run release with nocapture and one test thread"]
+fn diagnose_stable_difference_ablation() {
+    let pools = snapshot();
+    for (label, cutoff, tolerance) in [("filtered", 1000.0, 1e-8), ("full", 0.0, 1e-6)] {
+        let full = build_full_market_route_with_tvl(pools.clone(), cutoff).unwrap();
+        for stable_differences in [false, true] {
+            for newton_polish in [false, true] {
+                let options = SolveOptions {
+                    stable_differences,
+                    newton_polish,
+                    absolute_residual_value: tolerance,
+                    ..SolveOptions::default()
+                };
+                let start = std::time::Instant::now();
+                let result = solve_price_with_options(
+                    full.route.clone(),
+                    full.initial_price.clone(),
+                    options,
+                )
+                .unwrap();
+                println!(
+                    "{label} differences={stable_differences} polish={newton_polish} status={:?} assessment={:?} FG={} iterations={} KKT={:.6e} seconds={:.6}",
+                    result.status,
+                    result.assessment,
+                    result.evaluations,
+                    result.iterations,
+                    result.max_kkt_residual_ratio,
+                    start.elapsed().as_secs_f64()
+                );
+                // Diagnostic, not an assertion that every ablation converges.
+                assert!(result.price.iter().all(|p| p.is_finite() && *p > 0.0));
+            }
+        }
+    }
+}

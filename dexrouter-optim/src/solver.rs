@@ -1,5 +1,7 @@
 //! Routing-specific adaptation and acceptance; the optimizer stays task-agnostic.
-use dexrouter_lbfgsb::{Bound, LineSearchFailure, Options, Status, minimize};
+use dexrouter_lbfgsb::{
+    Bound, LineSearchFailure, Options, Status, minimize, minimize_with_differences,
+};
 use ndarray::Array1;
 
 use crate::{Route, RouteEvaluation, market::Market, utility::UtilityConjugate};
@@ -11,6 +13,12 @@ pub struct SolveOptions {
     /// Dimensionless positive guard relative to the initial price, not a utility constraint.
     pub relative_price_floor: f64,
     pub normalize_objective: bool,
+    /// Recenter every line search using stable per-market value differences.
+    pub stable_differences: bool,
+    /// Exact convex square-root-price reformulation. Requires explicit promises
+    /// from every market and the utility (built-in V2 and nonnegative baskets).
+    /// Unsupported models return an error, never silently become nonconvex.
+    pub sqrt_prices: bool,
     /// Enable diagonal curvature scaling and bounded coordinate recovery.
     pub precondition: bool,
     /// Reset curvature history and recompute the affine coordinate scales.
@@ -23,6 +31,8 @@ pub struct SolveOptions {
     /// Try graph-Newton recovery before coordinate recovery.
     /// Damping affects the step matrix, never the economic objective.
     pub graph_precondition: bool,
+    /// Continue successful sparse Newton recovery instead of rebuilding L-BFGS history.
+    pub newton_polish: bool,
     /// Acceptance uses per-token turnover, never the number of pools/tokens.
     pub relative_residual_tolerance: f64,
     /// Absolute residual value in the objective's chosen price unit.
@@ -40,12 +50,15 @@ impl Default for SolveOptions {
             },
             relative_price_floor: 1e-12,
             normalize_objective: true,
+            stable_differences: true,
+            sqrt_prices: false,
             precondition: true,
             restart_interval: 500,
             use_utility_anchor: true,
             decompose: true,
             analytic_curvature: true,
             graph_precondition: true,
+            newton_polish: true,
             relative_residual_tolerance: 1e-8,
             absolute_residual_value: 1e-8,
         }
@@ -75,7 +88,7 @@ pub enum SolveAssessment {
 }
 
 #[derive(Debug, Clone)]
-pub struct SolveDiagnostics {
+pub struct SolveDiagnostics<S = Status> {
     pub price: Array1<f64>,
     pub cost: f64,
     pub gradient: Array1<f64>,
@@ -84,7 +97,10 @@ pub struct SolveDiagnostics {
     pub iterations: usize,
     pub restarts: usize,
     /// Generic optimizer termination is preserved, independently of acceptance.
-    pub status: Status,
+    pub status: S,
+    /// Newton backend work only, separate from objective/gradient evaluations.
+    pub hessian_products: usize,
+    pub hessian_evaluations: usize,
     pub line_search_failure: Option<LineSearchFailure>,
     pub assessment: SolveAssessment,
     pub max_abs_gradient: f64,
@@ -101,7 +117,33 @@ pub struct SolveDiagnostics {
     pub optimization_blocks: usize,
 }
 
-impl SolveDiagnostics {
+impl<S> SolveDiagnostics<S> {
+    fn map_status<T>(self, map: impl FnOnce(S) -> T) -> SolveDiagnostics<T> {
+        SolveDiagnostics {
+            price: self.price,
+            cost: self.cost,
+            gradient: self.gradient,
+            evaluations: self.evaluations,
+            iterations: self.iterations,
+            restarts: self.restarts,
+            status: map(self.status),
+            line_search_failure: self.line_search_failure,
+            hessian_products: self.hessian_products,
+            hessian_evaluations: self.hessian_evaluations,
+            assessment: self.assessment,
+            max_abs_gradient: self.max_abs_gradient,
+            max_projected_gradient: self.max_projected_gradient,
+            max_scaled_projected_gradient: self.max_scaled_projected_gradient,
+            max_kkt_residual_ratio: self.max_kkt_residual_ratio,
+            max_deficit_value: self.max_deficit_value,
+            max_deficit_ratio: self.max_deficit_ratio,
+            numerical_lower_bounds: self.numerical_lower_bounds,
+            objective_scale: self.objective_scale,
+            optimizer_variables: self.optimizer_variables,
+            optimization_blocks: self.optimization_blocks,
+        }
+    }
+
     pub fn is_usable(&self) -> bool {
         matches!(
             self.assessment,
@@ -138,7 +180,92 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
     initial: Array1<f64>,
     options: SolveOptions,
 ) -> anyhow::Result<SolveDiagnostics> {
+    Ok(
+        solve_impl(route, initial, options, None)?.map_status(|s| match s {
+            BackendStatus::Lbfgsb(s) => s,
+            _ => unreachable!(),
+        }),
+    )
+}
+
+/// Explicit, opt-in matrix-free Newton backend. Status is the Newton termination,
+/// never relabeled as an L-BFGS-B task. Shares preprocessing and original economic
+/// acceptance, but does not run the legacy graph/coordinate recovery after Newton.
+/// Requires analytic curvature and affine prices. Both supplied FG/iteration
+/// budgets are honored by taking their minimum; HVP has its own global budget.
+pub fn solve_price_with_newton<U: UtilityConjugate, M: Market>(
+    route: Route<U, M>,
+    initial: Array1<f64>,
+    options: SolveOptions,
+    newton: dexrouter_newton::Options,
+) -> anyhow::Result<SolveDiagnostics<dexrouter_newton::Status>> {
+    Ok(
+        solve_impl(route, initial, options, Some(newton))?.map_status(|s| match s {
+            BackendStatus::Newton(s) => s,
+            _ => unreachable!(),
+        }),
+    )
+}
+
+struct PhaseResult {
+    x: Vec<f64>,
+    iterations: usize,
+    evaluations: usize,
+    status: Status,
+    line_search_failure: Option<LineSearchFailure>,
+}
+impl From<dexrouter_lbfgsb::OptimizeResult<f64>> for PhaseResult {
+    fn from(r: dexrouter_lbfgsb::OptimizeResult<f64>) -> Self {
+        Self {
+            x: r.x,
+            iterations: r.iterations,
+            evaluations: r.evaluations,
+            status: r.status,
+            line_search_failure: r.line_search_failure,
+        }
+    }
+}
+
+enum BackendStatus {
+    Lbfgsb(Status),
+    Newton(dexrouter_newton::Status),
+}
+
+// Only internal driver categories are shared. Public diagnostics retain the
+// native backend status, including HVP exhaustion and numerical stagnation.
+fn newton_control_status(s: dexrouter_newton::Status) -> Status {
+    use dexrouter_newton::Status as N;
+    match s {
+        N::ConvergedProjectedGradient => Status::ConvergedProjectedGradient,
+        N::MaxIterations => Status::MaxIterations,
+        N::MaxEvaluations | N::MaxHessianProducts => Status::MaxEvaluations,
+        N::LineSearchFailed | N::NumericalStagnation => Status::LineSearchFailed,
+    }
+}
+
+fn solve_impl<U: UtilityConjugate, M: Market>(
+    route: Route<U, M>,
+    initial: Array1<f64>,
+    mut options: SolveOptions,
+    newton_options: Option<dexrouter_newton::Options>,
+) -> anyhow::Result<SolveDiagnostics<BackendStatus>> {
     options.optimizer.validate()?;
+    if let Some(n) = &newton_options {
+        n.validate()?;
+        anyhow::ensure!(
+            !options.sqrt_prices && options.analytic_curvature,
+            "Newton requires affine prices and analytic curvature"
+        );
+        options.optimizer.max_evaluations =
+            options.optimizer.max_evaluations.min(n.max_evaluations);
+        options.optimizer.max_iterations = options.optimizer.max_iterations.min(n.max_iterations);
+    }
+    anyhow::ensure!(
+        !options.sqrt_prices
+            || (route.objective.convex_in_sqrt_prices()
+                && route.markets.iter().all(|(m, _)| m.convex_in_sqrt_prices())),
+        "square-root price coordinates require convexity promises from utility and markets"
+    );
     anyhow::ensure!(
         initial.len() == route.tokens && route.tokens > 0,
         "initial price length must match nonzero token count"
@@ -243,7 +370,12 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
     let mut status = Status::ConvergedProjectedGradient;
     let mut line_search_failure = None;
     let mut scale = initial.clone();
-    let mut pgtol = options.optimizer.pgtol;
+    let mut pgtol = newton_options
+        .as_ref()
+        .map_or(options.optimizer.pgtol, |n| n.pgtol);
+    let mut newton_status = None;
+    let mut hessian_products = 0;
+    let mut hessian_evaluations = 0;
     let mut progress = ResidualProgress::new(
         (0..route.tokens)
             .map(|i| token_residual_ratio(i, &price, &first, &math_lower, &math_upper, &options)),
@@ -263,6 +395,14 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         }
         if evaluations + 1 >= options.optimizer.max_evaluations {
             status = Status::MaxEvaluations;
+            break;
+        }
+        if newton_options
+            .as_ref()
+            .is_some_and(|n| hessian_products >= n.max_hessian_products)
+        {
+            status = Status::MaxEvaluations;
+            newton_status = Some(dexrouter_newton::Status::MaxHessianProducts);
             break;
         }
         // No extra anchors are introduced. Eliminated-price residuals still
@@ -324,10 +464,15 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
             .iter()
             .map(|&i| {
                 Bound::new(
-                    Some((lower[i] - price[i]) / scale[i]),
-                    upper[i]
-                        .is_finite()
-                        .then_some((upper[i] - price[i]) / scale[i]),
+                    Some(coordinate_bound(
+                        lower[i],
+                        price[i],
+                        scale[i],
+                        options.sqrt_prices,
+                    )),
+                    upper[i].is_finite().then(|| {
+                        coordinate_bound(upper[i], price[i], scale[i], options.sqrt_prices)
+                    }),
                 )
             })
             .collect();
@@ -338,18 +483,154 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         optimizer.pgtol = pgtol;
         // Start at zero around the current physical price. Multiplicative
         // p / scale -> x * scale round trips can move a price by one ulp.
-        let result = minimize(vec![0.0; block.tokens.len()], bounds, optimizer, |x, g| {
-            let p = physical_price(x, &block.tokens, &price, &scale, &lower, &upper);
-            let (gradient, cost_change) = evaluate_block(&route, block, &p, &price, &current);
-            for (local, &i) in block.tokens.iter().enumerate() {
-                g[local] = gradient[local] * scale[i] / objective_scale;
+        let zero = vec![0.0; block.tokens.len()];
+        let original_trades: Vec<_> = block
+            .markets
+            .iter()
+            .map(|&i| current.market_evaluations[i])
+            .collect();
+        let mut reference_x = zero.clone();
+        let mut reference_price = price.clone();
+        let mut reference_trades = original_trades.clone();
+        let mut last_x = zero.clone();
+        let mut last_price = price.clone();
+        let mut last_trades = original_trades.clone();
+        let mut previous_trial = (zero.clone(), price.clone(), original_trades.clone());
+        let mut fg = |x: &[f64], g: &mut [f64], reference: Option<&[f64]>| {
+            if let Some(reference) = reference
+                && reference != reference_x
+            {
+                // Expansion may reject the trial after the accepted one. Keep
+                // both quote caches: the search reference is the accepted point,
+                // not necessarily the last FG. No uncounted quote is needed.
+                if reference == last_x {
+                    reference_x.clone_from(&last_x);
+                    reference_price.clone_from(&last_price);
+                    reference_trades.clone_from(&last_trades);
+                } else {
+                    debug_assert_eq!(reference, previous_trial.0);
+                    reference_x.clone_from(&previous_trial.0);
+                    reference_price.clone_from(&previous_trial.1);
+                    reference_trades.clone_from(&previous_trial.2);
+                }
             }
-            Ok(cost_change / objective_scale)
-        })?;
+            let p = physical_price(
+                x,
+                &block.tokens,
+                &price,
+                &scale,
+                &lower,
+                &upper,
+                options.sqrt_prices,
+            );
+            let (gradient, cost_change, trades) = evaluate_block(
+                &route,
+                block,
+                &p,
+                &price,
+                &original_trades,
+                Some((&last_price, &last_trades)),
+                !options.stable_differences,
+            );
+            for (local, &i) in block.tokens.iter().enumerate() {
+                let jacobian = if options.sqrt_prices {
+                    scale[i] * (1.0 + 0.5 * x[local] * (scale[i] / price[i]))
+                } else {
+                    scale[i]
+                };
+                g[local] = gradient[local] * jacobian / objective_scale;
+            }
+            let difference = if reference.is_some() {
+                block_value_change(
+                    &route,
+                    block,
+                    &p,
+                    &reference_price,
+                    &trades,
+                    &reference_trades,
+                )
+            } else {
+                0.0
+            };
+            previous_trial = (
+                std::mem::replace(&mut last_x, x.to_vec()),
+                std::mem::replace(&mut last_price, p),
+                std::mem::replace(&mut last_trades, trades),
+            );
+            Ok((cost_change / objective_scale, difference / objective_scale))
+        };
+        let result = if let Some(n) = &newton_options {
+            let mut n = n.clone();
+            n.max_evaluations = optimizer.max_evaluations;
+            n.max_iterations = optimizer.max_iterations;
+            n.max_hessian_products -= hessian_products;
+            n.pgtol = pgtol;
+            let newton_bounds = bounds
+                .iter()
+                .map(|b| {
+                    dexrouter_newton::Bound::new(
+                        b.lower.unwrap_or(f64::NEG_INFINITY),
+                        b.upper.unwrap_or(f64::INFINITY),
+                    )
+                })
+                .collect();
+            let solved = dexrouter_newton::minimize(
+                zero,
+                newton_bounds,
+                n,
+                |x, g, reference| {
+                    let (value, change) = fg(x, g, reference)?;
+                    Ok(if options.stable_differences {
+                        dexrouter_newton::Evaluation::with_difference(value, change)
+                    } else {
+                        dexrouter_newton::Evaluation::value(value)
+                    })
+                },
+                |x| {
+                    let p = physical_price(x, &block.tokens, &price, &scale, &lower, &upper, false);
+                    let curvature = relative_curvature_for_markets(
+                        &route,
+                        &p,
+                        block.markets.iter().copied(),
+                    )
+                    .ok_or_else(|| anyhow::anyhow!("analytic route curvature unavailable"))?;
+                    Ok(BlockHessian {
+                        factors: block.tokens.iter().map(|&i| scale[i] / p[i]).collect(),
+                        tokens: block.tokens.clone(),
+                        curvature,
+                        objective_scale,
+                    })
+                },
+            )?;
+            hessian_products += solved.hessian_products;
+            hessian_evaluations += solved.hessian_evaluations;
+            newton_status = Some(solved.status);
+            // Internal phase record only; the public status below is native.
+            Ok(PhaseResult {
+                x: solved.x,
+                iterations: solved.iterations,
+                evaluations: solved.evaluations,
+                status: newton_control_status(solved.status),
+                line_search_failure: None,
+            })
+        } else if options.stable_differences {
+            minimize_with_differences(zero, bounds, optimizer, &mut fg).map(PhaseResult::from)
+        } else {
+            minimize(zero, bounds, optimizer, |x, g| fg(x, g, None).map(|v| v.0))
+                .map(PhaseResult::from)
+        }?;
         evaluations += result.evaluations;
         iterations += result.iterations;
         let before_round = price.clone();
-        price = physical_price(&result.x, &block.tokens, &price, &scale, &lower, &upper);
+        price = physical_price(
+            &result.x,
+            &block.tokens,
+            &price,
+            &scale,
+            &lower,
+            &upper,
+            options.sqrt_prices,
+        );
         status = result.status;
         line_search_failure = result.line_search_failure;
         current = route.evaluate(&price);
@@ -358,13 +639,43 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         if ratios.0 <= 1.0 && ratios.2 <= 1.0 {
             break;
         }
-        if matches!(
-            status,
-            Status::LineSearchFailed
-                | Status::MaxIterations
-                | Status::ConvergedProjectedGradient
-                | Status::ConvergedFunctionReduction
-        ) && block_residual(block, &price, &current, &math_lower, &math_upper, &options) > 1.0
+        if let Some(newton) = &newton_options
+            && status == Status::LineSearchFailed
+            && iterations < options.optimizer.max_iterations
+            && evaluations + 2 <= options.optimizer.max_evaluations
+            && let Some(repaired) = rounding_repair(
+                &route,
+                block,
+                &price,
+                &current,
+                &lower,
+                &upper,
+                &math_lower,
+                &math_upper,
+                &options,
+                newton.armijo,
+                &mut evaluations,
+                &mut hessian_evaluations,
+            )
+        {
+            price = repaired;
+            current = route.evaluate(&price);
+            evaluations += 1;
+            iterations += 1;
+            let ratios = residuals(&price, &current, &math_lower, &math_upper, &options);
+            if ratios.0 <= 1.0 && ratios.2 <= 1.0 {
+                break;
+            }
+        }
+        if newton_options.is_none()
+            && matches!(
+                status,
+                Status::LineSearchFailed
+                    | Status::MaxIterations
+                    | Status::ConvergedProjectedGradient
+                    | Status::ConvergedFunctionReduction
+            )
+            && block_residual(block, &price, &current, &math_lower, &math_upper, &options) > 1.0
             && options.precondition
             && iterations < options.optimizer.max_iterations
             && evaluations + 2 < options.optimizer.max_evaluations
@@ -400,6 +711,37 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
             }
             evaluations += 1;
             iterations += 1;
+            // Once the active fee/tick region is useful, solve the reduced KKT
+            // equations directly. Every accepted step still decreases the true
+            // dual and contracts the block's independently scaled KKT residual.
+            while graph_recovered
+                && options.newton_polish
+                && iterations < options.optimizer.max_iterations
+                && evaluations + 2 < options.optimizer.max_evaluations
+                && block_residual(block, &price, &current, &math_lower, &math_upper, &options) > 1.0
+            {
+                let before = price.clone();
+                if !graph_recovery(
+                    &route,
+                    block,
+                    &mut price,
+                    &current,
+                    &lower,
+                    &upper,
+                    &options,
+                    &mut evaluations,
+                ) {
+                    break;
+                }
+                let (next, change) = route.evaluate_centered(&price, Some((&before, &current)));
+                evaluations += 1;
+                iterations += 1;
+                if !change.is_finite() || change > 0.0 {
+                    price = before;
+                    break;
+                }
+                current = next;
+            }
             let ratios = residuals(&price, &current, &math_lower, &math_upper, &options);
             if ratios.0 <= 1.0 && ratios.2 <= 1.0 {
                 break;
@@ -486,7 +828,23 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
         evaluations,
         iterations,
         restarts,
-        status,
+        status: if newton_options.is_some() {
+            let native = newton_status
+                .filter(|&s| newton_control_status(s) == status)
+                .unwrap_or(match status {
+                    Status::ConvergedProjectedGradient => {
+                        dexrouter_newton::Status::ConvergedProjectedGradient
+                    }
+                    Status::MaxIterations => dexrouter_newton::Status::MaxIterations,
+                    Status::MaxEvaluations => dexrouter_newton::Status::MaxEvaluations,
+                    _ => dexrouter_newton::Status::NumericalStagnation,
+                });
+            BackendStatus::Newton(native)
+        } else {
+            BackendStatus::Lbfgsb(status)
+        },
+        hessian_products,
+        hessian_evaluations,
         line_search_failure,
         assessment,
         max_abs_gradient,
@@ -504,6 +862,9 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
 struct OptimizationBlock {
     tokens: Vec<usize>,
     markets: Vec<usize>,
+    // Per-market local gradient indices; usize::MAX denotes a fixed endpoint.
+    // Precompute once rather than binary-searching twice per pool per FG.
+    market_tokens: Vec<[usize; 2]>,
 }
 
 fn optimization_blocks<U: UtilityConjugate, M: Market>(
@@ -558,6 +919,7 @@ fn optimization_blocks<U: UtilityConjugate, M: Market>(
             OptimizationBlock {
                 tokens,
                 markets: Vec::new(),
+                market_tokens: Vec::new(),
             }
         })
         .collect();
@@ -570,6 +932,16 @@ fn optimization_blocks<U: UtilityConjugate, M: Market>(
         if id != usize::MAX {
             blocks[id].markets.push(index);
         }
+    }
+    for block in &mut blocks {
+        block.market_tokens = block
+            .markets
+            .iter()
+            .map(|&index| {
+                let (_, (a, b)) = &route.markets[index];
+                [*a, *b].map(|token| block.tokens.binary_search(&token).unwrap_or(usize::MAX))
+            })
+            .collect();
     }
     blocks
 }
@@ -636,6 +1008,180 @@ fn block_residual(
         .fold(0.0, f64::max)
 }
 
+// Resolve representability stalls without allowing uphill Newton steps. A
+// diagonal correction of other coordinates can fund a coupled lattice move;
+// rounding one coordinate alone can be an inferior local discrete minimum.
+// Every probe uses the original centered objective and economic tolerances.
+#[allow(clippy::too_many_arguments)]
+fn rounding_repair<U: UtilityConjugate, M: Market>(
+    route: &Route<U, M>,
+    block: &OptimizationBlock,
+    price: &Array1<f64>,
+    current: &RouteEvaluation,
+    lower: &Array1<f64>,
+    upper: &Array1<f64>,
+    math_lower: &Array1<f64>,
+    math_upper: &Array1<f64>,
+    options: &SolveOptions,
+    armijo: f64,
+    evaluations: &mut usize,
+    models: &mut usize,
+) -> Option<Array1<f64>> {
+    if *evaluations + 2 > options.optimizer.max_evaluations {
+        return None;
+    }
+    let model = relative_curvature_for_markets(route, price, block.markets.iter().copied())?;
+    *models += 1;
+    let i = *block.tokens.iter().max_by(|&&a, &&b| {
+        token_residual_ratio(a, price, current, math_lower, math_upper, options).total_cmp(
+            &token_residual_ratio(b, price, current, math_lower, math_upper, options),
+        )
+    })?;
+    let before = block_residual(block, price, current, math_lower, math_upper, options);
+    let mut free = vec![false; route.tokens];
+    for &k in &block.tokens {
+        free[k] = true;
+    }
+    let components = crate::graph::components(
+        route.tokens,
+        model
+            .edges
+            .iter()
+            .filter_map(|&(a, b, _)| (free[a] && free[b]).then_some((a, b))),
+    );
+    let correlated = components.iter().find(|c| c.contains(&i))?;
+    // Avoid simultaneous Jacobi corrections of strongly coupled prices. Use
+    // one independent, representably descending coordinate as the background.
+    let mut base = price.clone();
+    let mut background = None;
+    let mut best_decrease = 0.0;
+    for &k in &block.tokens {
+        if model.diagonal[k] > 0.0 && !correlated.contains(&k) {
+            let relative = (-current.gradient[k] * price[k] / model.diagonal[k]).clamp(-0.5, 0.5);
+            let candidate = relative
+                .mul_add(price[k], price[k])
+                .max(lower[k])
+                .min(upper[k]);
+            let step = (candidate - price[k]) / price[k];
+            let decrease =
+                -(current.gradient[k] * price[k] * step + 0.5 * model.diagonal[k] * step * step);
+            if decrease.is_finite() && decrease > best_decrease {
+                background = Some((k, candidate));
+                best_decrease = decrease;
+            }
+        }
+    }
+    if let Some((k, p)) = background {
+        base[k] = p;
+    }
+    let parent = model
+        .edges
+        .iter()
+        .filter_map(|&(a, b, w)| {
+            let j = if a == i {
+                b
+            } else if b == i {
+                a
+            } else {
+                return None;
+            };
+            block.tokens.binary_search(&j).is_ok().then_some((j, w))
+        })
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(j, _)| j);
+    let mut candidates = vec![base.clone()];
+    if model.diagonal[i] > 0.0 {
+        let relative = (-current.gradient[i] * price[i] / model.diagonal[i]).clamp(-0.5, 0.5);
+        let center = relative.mul_add(price[i], price[i]);
+        for value in [center, center.next_down(), center.next_up()] {
+            let mut p = base.clone();
+            p[i] = value.max(lower[i]).min(upper[i]);
+            candidates.push(p);
+        }
+    }
+    for neighbor in [price[i].next_down(), price[i].next_up()] {
+        let mut p = base.clone();
+        p[i] = neighbor.max(lower[i]).min(upper[i]);
+        candidates.push(p);
+    }
+    if let Some(j) = parent {
+        for offset in [-1_i32, 1, -2, 2, -4, 4, -8, 8, -16, 16, -32, 32] {
+            let mut p = base.clone();
+            p[j] = price[j];
+            for _ in 0..offset.abs() {
+                p[j] = if offset < 0 {
+                    p[j].next_down()
+                } else {
+                    p[j].next_up()
+                };
+            }
+            p[j] = p[j].max(lower[j]).min(upper[j]);
+            let mut rhs = crate::numerics::Sum::default();
+            rhs.add(-current.gradient[i] * price[i]);
+            for &(a, b, w) in &model.edges {
+                let neighbor = if a == i {
+                    b
+                } else if b == i {
+                    a
+                } else {
+                    continue;
+                };
+                rhs.add(w * ((p[neighbor] - price[neighbor]) / price[neighbor]));
+            }
+            let center = (rhs.total() / model.diagonal[i]).mul_add(price[i], price[i]);
+            for value in [center, center.next_down(), center.next_up()] {
+                p[i] = value.max(lower[i]).min(upper[i]);
+                candidates.push(p.clone());
+            }
+        }
+    }
+    let mut best = None;
+    let mut best_ratio = before;
+    for candidate in candidates {
+        // Reserve independent full-route verification of the selected candidate.
+        if *evaluations + 2 > options.optimizer.max_evaluations {
+            break;
+        }
+        if candidate == *price || candidate.iter().any(|p| !p.is_finite()) {
+            continue;
+        }
+        let mut slope = crate::numerics::Sum::default();
+        for (g, (p, r)) in current.gradient.iter().zip(candidate.iter().zip(price)) {
+            slope.add(g * (p - r));
+        }
+        let slope = slope.total();
+        if !slope.is_finite() || slope >= 0.0 {
+            continue;
+        }
+        let (evaluation, change) = route.evaluate_centered(&candidate, Some((price, current)));
+        *evaluations += 1;
+        if !evaluation.cost.is_finite()
+            || evaluation.gradient.iter().any(|g| !g.is_finite())
+            || evaluation.turnover.iter().any(|t| !t.is_finite())
+            || !change.is_finite()
+            || change > armijo * slope
+        {
+            continue;
+        }
+        let ratio = block_residual(
+            block,
+            &candidate,
+            &evaluation,
+            math_lower,
+            math_upper,
+            options,
+        );
+        if ratio < best_ratio && (ratio <= 1.0 || ratio < 0.9 * before) {
+            best_ratio = ratio;
+            best = Some(candidate);
+            if ratio <= 1.0 {
+                break;
+            }
+        }
+    }
+    best
+}
+
 // Outside-block prices are unchanged. For an opted-in separable utility this
 // is exactly the original centered objective with constant pool terms omitted.
 fn evaluate_block<U: UtilityConjugate, M: Market>(
@@ -643,8 +1189,10 @@ fn evaluate_block<U: UtilityConjugate, M: Market>(
     block: &OptimizationBlock,
     price: &Array1<f64>,
     reference_price: &Array1<f64>,
-    reference: &RouteEvaluation,
-) -> (Vec<f64>, f64) {
+    reference: &[crate::market::MarketEvaluation],
+    previous: Option<(&Array1<f64>, &[crate::market::MarketEvaluation])>,
+    accurate_origin_change: bool,
+) -> (Vec<f64>, f64, Vec<crate::market::MarketEvaluation>) {
     let utility_gradient = route.objective.grad(price);
     let mut gradient = vec![crate::numerics::Sum::default(); block.tokens.len()];
     for (local, &i) in block.tokens.iter().enumerate() {
@@ -652,18 +1200,40 @@ fn evaluate_block<U: UtilityConjugate, M: Market>(
     }
     let mut change = crate::numerics::Sum::default();
     change.add(route.objective.value_change(price, reference_price));
-    for &index in &block.markets {
+    let mut trades = Vec::with_capacity(block.markets.len());
+    for (local_market, &index) in block.markets.iter().enumerate() {
         let (market, (a, b)) = &route.markets[index];
         let v = [price[*a], price[*b]];
-        let trade = market.evaluate(v);
-        change.add(market.value_change(
-            v,
-            [reference_price[*a], reference_price[*b]],
-            trade,
-            reference.market_evaluations[index],
-        ));
-        for (local, token) in [*a, *b].into_iter().enumerate() {
-            if let Ok(index) = block.tokens.binary_search(&token) {
+        // Active bounds and rounded backtracking steps often leave most pools
+        // unchanged. Quotes are pure functions of their two physical prices;
+        // even a rejected trial is a valid cache, never an accepted iterate.
+        let trade = if let Some((p, trades)) = previous
+            && v == [p[*a], p[*b]]
+        {
+            trades[local_market]
+        } else if v == [reference_price[*a], reference_price[*b]] {
+            reference[local_market]
+        } else {
+            market.evaluate(v)
+        };
+        trades.push(trade);
+        change.add(if v == [reference_price[*a], reference_price[*b]] {
+            0.0
+        } else if accurate_origin_change {
+            market.value_change(
+                v,
+                [reference_price[*a], reference_price[*b]],
+                trade,
+                reference[local_market],
+            )
+        } else {
+            // With per-search differences this value is only the absolute
+            // function-reduction scale, never a Wolfe comparison or a decrease.
+            // Do not calculate two expensive stable remainders per pool.
+            trade.value - reference[local_market].value
+        });
+        for (local, index) in block.market_tokens[local_market].into_iter().enumerate() {
+            if index != usize::MAX {
                 gradient[index].add(trade.output[local] - trade.input[local]);
             }
         }
@@ -674,7 +1244,61 @@ fn evaluate_block<U: UtilityConjugate, M: Market>(
             .map(crate::numerics::Sum::total)
             .collect(),
         change.total(),
+        trades,
     )
+}
+
+fn block_value_change<U: UtilityConjugate, M: Market>(
+    route: &Route<U, M>,
+    block: &OptimizationBlock,
+    price: &Array1<f64>,
+    reference_price: &Array1<f64>,
+    trades: &[crate::market::MarketEvaluation],
+    reference: &[crate::market::MarketEvaluation],
+) -> f64 {
+    let mut change = crate::numerics::Sum::default();
+    change.add(route.objective.value_change(price, reference_price));
+    for (local, &index) in block.markets.iter().enumerate() {
+        let (market, (a, b)) = &route.markets[index];
+        if price[*a] == reference_price[*a] && price[*b] == reference_price[*b] {
+            continue;
+        }
+        change.add(market.value_change(
+            [price[*a], price[*b]],
+            [reference_price[*a], reference_price[*b]],
+            trades[local],
+            reference[local],
+        ));
+    }
+    change.total()
+}
+
+struct BlockHessian {
+    curvature: RelativeCurvature,
+    tokens: Vec<usize>,
+    factors: Vec<f64>,
+    objective_scale: f64,
+}
+impl dexrouter_newton::Hessian for BlockHessian {
+    fn apply(&self, vector: &[f64], product: &mut [f64]) -> anyhow::Result<()> {
+        let mut relative = vec![0.0; self.curvature.diagonal.len()];
+        for (local, &token) in self.tokens.iter().enumerate() {
+            relative[token] = vector[local] * self.factors[local];
+        }
+        let applied = self.curvature.apply(&relative);
+        for (local, &token) in self.tokens.iter().enumerate() {
+            product[local] = applied[token] * self.factors[local] / self.objective_scale;
+        }
+        Ok(())
+    }
+    fn diagonal(&self, diagonal: &mut [f64]) -> anyhow::Result<()> {
+        for (local, &token) in self.tokens.iter().enumerate() {
+            diagonal[local] =
+                self.curvature.diagonal[token] * self.factors[local] * self.factors[local]
+                    / self.objective_scale;
+        }
+        Ok(())
+    }
 }
 
 struct RelativeCurvature {
@@ -703,6 +1327,14 @@ fn relative_curvature<U: UtilityConjugate, M: Market>(
     route: &Route<U, M>,
     price: &Array1<f64>,
 ) -> Option<RelativeCurvature> {
+    relative_curvature_for_markets(route, price, 0..route.markets.len())
+}
+
+fn relative_curvature_for_markets<U: UtilityConjugate, M: Market>(
+    route: &Route<U, M>,
+    price: &Array1<f64>,
+    markets: impl Iterator<Item = usize>,
+) -> Option<RelativeCurvature> {
     let utility = route.objective.diagonal_hessian(price)?;
     if utility.len() != route.tokens {
         return None;
@@ -713,8 +1345,9 @@ fn relative_curvature<U: UtilityConjugate, M: Market>(
         .map(|(&h, &p)| h * p * p)
         .collect();
     let mut diagonal = utility_diagonal.clone();
-    let mut edges = Vec::with_capacity(route.markets.len());
-    for (market, (a, b)) in &route.markets {
+    let mut edges = Vec::with_capacity(markets.size_hint().0);
+    for index in markets {
+        let (market, (a, b)) = &route.markets[index];
         let weight = market.relative_curvature([price[*a], price[*b]])?;
         if !weight.is_finite() || weight < 0.0 {
             return None;
@@ -768,14 +1401,34 @@ fn graph_recovery<U: UtilityConjugate, M: Market>(
     if normalization <= 0.0 {
         return false;
     }
-    let damping = 1e-8;
+    // Homogeneity gives H_relative = a weighted graph Laplacian. Grounded
+    // components (fixed/active price or positive utility curvature) have no
+    // scale null mode: solve their Newton equations without biasing weak modes.
+    let grounded =
+        crate::graph::components(route.tokens, model.edges.iter().map(|&(a, b, _)| (a, b)))
+            .iter()
+            .all(|component| {
+                component
+                    .iter()
+                    .any(|&i| !movable[i] || model.utility_diagonal[i] > 0.0)
+            });
+    let damping = if grounded { 0.0 } else { 1e-8 };
+    let regularizer: Vec<_> = model
+        .diagonal
+        .iter()
+        .map(|&d| {
+            // Relative (Jacobi metric) damping must not swamp low-liquidity pools
+            // merely because an unrelated edge has enormous liquidity.
+            damping * if d > 0.0 { d / normalization } else { 1.0 }
+        })
+        .collect();
     let math_lower = route.objective.lower_bounds();
     let math_upper = route.objective.upper_bounds();
     let before_ratio = block_residual(block, price, current, &math_lower, &math_upper, options);
     let diagonal: Vec<_> = (0..route.tokens)
         .map(|i| {
             if movable[i] {
-                model.diagonal[i] / normalization + damping
+                model.diagonal[i] / normalization + regularizer[i]
             } else {
                 1.0
             }
@@ -802,7 +1455,7 @@ fn graph_recovery<U: UtilityConjugate, M: Market>(
             .enumerate()
             .map(|(i, &h)| {
                 if movable[i] {
-                    h / normalization + damping * x[i]
+                    h / normalization + regularizer[i] * x[i]
                 } else {
                     x[i]
                 }
@@ -945,6 +1598,15 @@ fn coordinate_sweep<U: UtilityConjugate, M: Market>(
     }
 }
 
+fn coordinate_bound(bound: f64, origin: f64, scale: f64, sqrt: bool) -> f64 {
+    let affine = (bound - origin) / scale;
+    if sqrt {
+        affine * (2.0 * (origin.sqrt() / (bound.sqrt() + origin.sqrt())))
+    } else {
+        affine
+    }
+}
+
 fn physical_price(
     x: &[f64],
     tokens: &[usize],
@@ -952,10 +1614,26 @@ fn physical_price(
     scale: &Array1<f64>,
     lower: &Array1<f64>,
     upper: &Array1<f64>,
+    sqrt: bool,
 ) -> Array1<f64> {
     let mut price = origin.clone();
     for (&x, &i) in x.iter().zip(tokens) {
-        price[i] = x.mul_add(scale[i], origin[i]).max(lower[i]).min(upper[i]);
+        price[i] = if sqrt {
+            // p = p_ref (1+t)^2, t = x scale / (2 p_ref). Expanded around
+            // p_ref so zero maps back exactly, including prices whose square
+            // root would otherwise lose an ulp on a sqrt/square round trip.
+            let t = 0.5 * x * (scale[i] / origin[i]);
+            if t.abs() <= 0.5 {
+                (t * (2.0 + t)).mul_add(origin[i], origin[i])
+            } else {
+                let root = 1.0 + t;
+                (origin[i] * root) * root
+            }
+        } else {
+            x.mul_add(scale[i], origin[i])
+        }
+        .max(lower[i])
+        .min(upper[i]);
     }
     price
 }
@@ -997,6 +1675,106 @@ mod tests {
     use super::*;
     use crate::{market::UniswapV2, utility::NonnegativeLinear};
     use ndarray::arr1;
+
+    #[test]
+    fn rounding_repair_counts_quotes_and_reserves_independent_verification() {
+        use crate::{
+            market::{Market, MarketEvaluation},
+            utility::BasketLiquidation,
+        };
+        use std::{cell::Cell, rc::Rc};
+        struct Counted {
+            inner: UniswapV2,
+            quotes: Rc<Cell<usize>>,
+        }
+        impl Market for Counted {
+            fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
+                let t = self.evaluate(v);
+                (t.input, t.output)
+            }
+            fn evaluate(&self, v: [f64; 2]) -> MarketEvaluation {
+                self.quotes.set(self.quotes.get() + 1);
+                self.inner.evaluate(v)
+            }
+            fn value_change(
+                &self,
+                v: [f64; 2],
+                r: [f64; 2],
+                t: MarketEvaluation,
+                old: MarketEvaluation,
+            ) -> f64 {
+                self.inner.value_change(v, r, t, old)
+            }
+            fn relative_curvature(&self, v: [f64; 2]) -> Option<f64> {
+                self.inner.relative_curvature(v)
+            }
+        }
+        let quotes = Rc::new(Cell::new(0));
+        let route = Route {
+            objective: BasketLiquidation {
+                out: 0,
+                inputs: arr1(&[0.0, 1.0]),
+            },
+            tokens: 2,
+            markets: vec![(
+                Counted {
+                    inner: UniswapV2::new(1000.0, 1000.0, 1.0),
+                    quotes: quotes.clone(),
+                },
+                (1, 0),
+            )],
+        };
+        let price = arr1(&[1.0, 1.0]);
+        let current = route.evaluate(&price);
+        let lower = arr1(&[1.0, 1e-12]);
+        let upper = arr1(&[1.0, f64::INFINITY]);
+        let ml = route.objective.lower_bounds();
+        let mu = route.objective.upper_bounds();
+        let block = OptimizationBlock {
+            tokens: vec![1],
+            markets: vec![0],
+            market_tokens: vec![[0, usize::MAX]],
+        };
+        for cap in [1, 2, 3, 10] {
+            let mut options = SolveOptions::default();
+            options.optimizer.max_evaluations = cap;
+            let mut evaluations = 0;
+            let mut models = 0;
+            quotes.set(0);
+            let repaired = rounding_repair(
+                &route,
+                &block,
+                &price,
+                &current,
+                &lower,
+                &upper,
+                &ml,
+                &mu,
+                &options,
+                1e-4,
+                &mut evaluations,
+                &mut models,
+            );
+            assert_eq!(quotes.get(), evaluations);
+            if cap == 1 {
+                assert!(repaired.is_none());
+                assert_eq!(evaluations, 0);
+                assert_eq!(models, 0);
+                continue;
+            }
+            assert!(evaluations + 1 <= cap);
+            assert_eq!(models, 1);
+            let repaired = repaired.expect("a rounded scalar Newton correction must descend");
+            let (after, change) = route.evaluate_centered(&repaired, Some((&price, &current)));
+            let slope = current.gradient[1] * (repaired[1] - price[1]);
+            assert!(slope < 0.0 && change <= 1e-4 * slope);
+            assert!(after.cost < current.cost);
+            assert!(
+                block_residual(&block, &repaired, &after, &ml, &mu, &options)
+                    < 0.9 * block_residual(&block, &price, &current, &ml, &mu, &options)
+            );
+        }
+    }
 
     #[test]
     fn residual_watchdog_ignores_tiny_changes_and_accepted_tokens() {
@@ -1058,14 +1836,262 @@ mod tests {
             for &i in &block.tokens {
                 price[i] *= 1.1;
             }
-            let (gradient, change) =
-                evaluate_block(&route, &block, &price, &reference_price, &reference);
+            let reference_trades: Vec<_> = block
+                .markets
+                .iter()
+                .map(|&i| reference.market_evaluations[i])
+                .collect();
+            let (gradient, change, _) = evaluate_block(
+                &route,
+                &block,
+                &price,
+                &reference_price,
+                &reference_trades,
+                None,
+                true,
+            );
             let (full, full_change) =
                 route.evaluate_centered(&price, Some((&reference_price, &reference)));
             assert!((change - full_change).abs() < 1e-12);
             for (local, &i) in block.tokens.iter().enumerate() {
                 assert_eq!(gradient[local], full.gradient[i]);
             }
+        }
+    }
+
+    #[test]
+    fn block_quotes_reuse_only_identical_physical_market_prices() {
+        use std::cell::Cell;
+        struct Counted {
+            pool: UniswapV2,
+            quotes: Cell<usize>,
+            differences: Cell<usize>,
+        }
+        impl Market for Counted {
+            fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
+                self.pool.arbitrage(v)
+            }
+            fn evaluate(&self, v: [f64; 2]) -> crate::market::MarketEvaluation {
+                self.quotes.set(self.quotes.get() + 1);
+                self.pool.evaluate(v)
+            }
+            fn value_change(
+                &self,
+                v: [f64; 2],
+                r: [f64; 2],
+                t: crate::market::MarketEvaluation,
+                rt: crate::market::MarketEvaluation,
+            ) -> f64 {
+                self.differences.set(self.differences.get() + 1);
+                self.pool.value_change(v, r, t, rt)
+            }
+        }
+        let route = Route {
+            objective: NonnegativeLinear {
+                c: arr1(&[1.0, 0.0, 0.0]),
+            },
+            tokens: 3,
+            markets: [1, 2]
+                .into_iter()
+                .map(|i| {
+                    (
+                        Counted {
+                            pool: UniswapV2::new(1000.0, 2000.0, 0.997),
+                            quotes: Cell::new(0),
+                            differences: Cell::new(0),
+                        },
+                        (0, i),
+                    )
+                })
+                .collect(),
+        };
+        let block = OptimizationBlock {
+            tokens: vec![1, 2],
+            markets: vec![0, 1],
+            market_tokens: vec![[usize::MAX, 0], [usize::MAX, 1]],
+        };
+        let origin = arr1(&[1.0, 0.4, 0.3]);
+        let reference = route.evaluate(&origin);
+        let first = arr1(&[1.0, 0.45, 0.3]);
+        let (_, _, first_trades) = evaluate_block(
+            &route,
+            &block,
+            &first,
+            &origin,
+            &reference.market_evaluations,
+            None,
+            false,
+        );
+        assert_eq!(route.markets[0].0.quotes.get(), 2);
+        assert_eq!(route.markets[1].0.quotes.get(), 1);
+        for (m, _) in &route.markets {
+            m.quotes.set(0);
+        }
+        // The previous quote may be a rejected trial: reuse its values only for
+        // exactly matching pool prices, while keeping the search origin intact.
+        let second = arr1(&[1.0, 0.45, 0.35]);
+        let (gradient, change, trades) = evaluate_block(
+            &route,
+            &block,
+            &second,
+            &origin,
+            &reference.market_evaluations,
+            Some((&first, &first_trades)),
+            false,
+        );
+        assert_eq!(route.markets[0].0.quotes.get(), 0);
+        assert_eq!(route.markets[1].0.quotes.get(), 1);
+        let delta = block_value_change(&route, &block, &second, &first, &trades, &first_trades);
+        assert_eq!(route.markets[0].0.differences.get(), 0);
+        assert_eq!(route.markets[1].0.differences.get(), 1);
+        let full = route.evaluate(&second);
+        for (local, &i) in block.tokens.iter().enumerate() {
+            assert_eq!(gradient[local], full.gradient[i]);
+        }
+        assert!((change - (full.cost - reference.cost)).abs() < 1e-12);
+        let first_evaluation = route.evaluate(&first);
+        let (_, full_delta) = route.evaluate_centered(&second, Some((&first, &first_evaluation)));
+        assert_eq!(delta, full_delta);
+        for (m, _) in &route.markets {
+            m.quotes.set(0);
+        }
+        let (_, _, at_origin) = evaluate_block(
+            &route,
+            &block,
+            &origin,
+            &origin,
+            &reference.market_evaluations,
+            Some((&second, &trades)),
+            true,
+        );
+        for (m, _) in &route.markets {
+            assert_eq!(m.quotes.get(), 0);
+        }
+        for (t, r) in at_origin.iter().zip(&reference.market_evaluations) {
+            assert_eq!(t.input, r.input);
+            assert_eq!(t.output, r.output);
+            assert_eq!(t.value, r.value);
+        }
+    }
+
+    #[test]
+    fn block_hessian_matches_gradient_differences_and_masks_fixed_prices() {
+        use crate::market::UniswapV3;
+        use dexrouter_newton::Hessian;
+        fn check<M: Market>(market: M) {
+            let route = Route {
+                objective: NonnegativeLinear {
+                    c: arr1(&[1.0, 0.0, 0.0]),
+                },
+                markets: vec![(market, (0, 1))],
+                tokens: 3,
+            };
+            let p = arr1(&[1.0, 0.65, 7.0]);
+            let scale = arr1(&[1.0, 2.0, 3.0]);
+            let h = BlockHessian {
+                curvature: relative_curvature(&route, &p).unwrap(),
+                tokens: vec![1, 2],
+                factors: vec![scale[1] / p[1], scale[2] / p[2]],
+                objective_scale: 11.0,
+            };
+            let v = [0.3, -0.2];
+            let mut hv = [0.0; 2];
+            h.apply(&v, &mut hv).unwrap();
+            let mut plus = p.clone();
+            let mut minus = p.clone();
+            let eps = 1e-6;
+            for (i, &t) in h.tokens.iter().enumerate() {
+                plus[t] += eps * scale[t] * v[i];
+                minus[t] -= eps * scale[t] * v[i];
+            }
+            let gp = route.evaluate(&plus).gradient;
+            let gm = route.evaluate(&minus).gradient;
+            for (i, &t) in h.tokens.iter().enumerate() {
+                let fd = (gp[t] - gm[t]) * scale[t] / (2.0 * eps * 11.0);
+                assert!(
+                    (fd - hv[i]).abs() < 1e-6 * fd.abs().max(1.0),
+                    "{fd} != {}",
+                    hv[i]
+                );
+            }
+            assert_eq!(hv[1], 0.0);
+        }
+        check(UniswapV2::new(100.0, 120.0, 0.997));
+        check(UniswapV3::new(
+            1.0,
+            vec![2.0, 1.1, 0.8, 0.5],
+            vec![50.0, 100.0, 150.0],
+            0.997,
+        ));
+    }
+
+    #[test]
+    fn grounded_newton_does_not_damp_a_weak_pool_by_unrelated_liquidity() {
+        let route = Route {
+            objective: crate::utility::BasketLiquidation {
+                out: 0,
+                inputs: arr1(&[0.0, 0.0, 10.0]),
+            },
+            markets: vec![
+                (UniswapV2::new(1e12, 1e12, 1.0), (0, 1)),
+                (UniswapV2::new(1000.0, 1000.0, 1.0), (0, 2)),
+            ],
+            tokens: 3,
+        };
+        let lower = arr1(&[1.0, 1e-12, 1e-12]);
+        let upper = arr1(&[1.0, f64::INFINITY, f64::INFINITY]);
+        let block = optimization_blocks(&route, &lower, &upper, false).remove(0);
+        let mut price = arr1(&[1.0, 1.0, 0.99]);
+        let current = route.evaluate(&price);
+        let mut evaluations = 1;
+        assert!(graph_recovery(
+            &route,
+            &block,
+            &mut price,
+            &current,
+            &lower,
+            &upper,
+            &SolveOptions::default(),
+            &mut evaluations
+        ));
+        let next = route.evaluate(&price);
+        assert_eq!(price[0], 1.0);
+        assert_eq!(price[1], 1.0);
+        assert!(next.gradient[2].abs() < 0.05 * current.gradient[2].abs());
+        assert!(next.cost < current.cost);
+        assert_eq!(evaluations, 2);
+    }
+
+    #[test]
+    fn sqrt_coordinate_map_preserves_origin_bounds_and_chain_rule() {
+        let origin = arr1(&[1.7, 1e-12, 1e12]);
+        let scale = origin.clone();
+        let lower = origin.mapv(|p| p * 1e-12);
+        let upper = origin.mapv(|p| p * 100.0);
+        let tokens = [0, 1, 2];
+        assert_eq!(
+            physical_price(&[0.0; 3], &tokens, &origin, &scale, &lower, &upper, true),
+            origin
+        );
+        for multiplier in [1e-12, 0.25, 1.0, 100.0] {
+            let x: Vec<_> = (0..3)
+                .map(|i| coordinate_bound(origin[i] * multiplier, origin[i], scale[i], true))
+                .collect();
+            let p = physical_price(&x, &tokens, &origin, &scale, &lower, &upper, true);
+            for i in 0..3 {
+                assert!((p[i] / (origin[i] * multiplier) - 1.0).abs() < 1e-8);
+            }
+        }
+        let x = [0.2, -0.3, 0.8];
+        for i in 0..3 {
+            let mut plus = x;
+            plus[i] += 1e-5;
+            let mut minus = x;
+            minus[i] -= 1e-5;
+            let fp = physical_price(&plus, &tokens, &origin, &scale, &lower, &upper, true)[i];
+            let fm = physical_price(&minus, &tokens, &origin, &scale, &lower, &upper, true)[i];
+            let jacobian = scale[i] * (1.0 + 0.5 * x[i] * scale[i] / origin[i]);
+            assert!(((fp - fm) / (2e-5 * jacobian) - 1.0).abs() < 1e-9);
         }
     }
 

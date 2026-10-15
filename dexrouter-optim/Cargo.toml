@@ -12,3 +12,4 @@ serde.workspace = true
 serde_json.workspace = true
 
 dexrouter-lbfgsb = { path = "../dexrouter-lbfgsb" }
+dexrouter-newton = { path = "../dexrouter-newton" }

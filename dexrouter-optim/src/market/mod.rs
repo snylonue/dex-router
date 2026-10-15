@@ -12,6 +12,13 @@ pub struct MarketEvaluation {
 }
 
 pub trait Market {
+    /// Opt in only if the support function evaluated at p_i = z_i^2 is convex
+    /// for positive z. This is stronger than convexity in prices; V3 does not
+    /// generally satisfy it when finite liquidity ranges are exhausted.
+    fn convex_in_sqrt_prices(&self) -> bool {
+        false
+    }
+
     fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]);
 
     /// Local support curvature in relative-price increments:

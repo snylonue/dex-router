@@ -34,6 +34,69 @@ utilities/markets remain compatible: separability/constant coordinates are
 opt-in, and unknown curvature falls back to finite differences. The optional
 utility diagonal-Hessian contract also promises zero off-diagonal entries.
 
+## Structured solves and stable comparisons
+
+- `stable_differences` (default true) recenters **each line search**, not just
+  each restart, using cached per-pool support differences. No extra market quote
+  is needed. Wolfe conditions, original economic checks and budgets are unchanged.
+- Graph recovery solves grounded relative-price Laplacians without damping.
+  Ungrounded components use diagonal-metric damping instead of a global largest
+  curvature, which previously suppressed low-liquidity modes. `newton_polish`
+  (default true) continues successful Newton steps while they decrease the dual
+  and contract the original KKT residual, rather than immediately resetting L-BFGS.
+- `sqrt_prices` (default false) enables an exact convex reformulation for V2
+  and nonnegative basket/linear utilities: squared positive parts of affine
+  square-root prices plus a nonnegative diagonal quadratic. Both traits must
+  explicitly promise this property. V3 and unknown custom models are rejected,
+  since convexity in prices alone does not imply convexity after this substitution.
+  Bounds, gradients and returned physical prices are transformed consistently.
+
+See [derivation, ablations and limitations](<dexrouter-optim/tests/STRUCTURED_SOLVE.md>).
+The square-root mode is deliberately opt-in: some fee-region cases improve,
+others regress. These strategies do not remove binary64 price-grid limits.
+
+## Opt-in standalone Newton-CG backend
+
+The default remains L-BFGS-B. Select the new backend explicitly:
+
+```rust,ignore
+let diagnostics = dexrouter_optim::solve_price_with_newton(
+    route, initial_price, SolveOptions::default(),
+    dexrouter_newton::Options {
+        max_iterations: 5000, max_evaluations: 50_000,
+        ..Default::default()
+    },
+)?;
+anyhow::ensure!(diagnostics.is_usable(), "economic residual check failed");
+```
+
+The generic backend accepts only a box, FG/optional accurate-difference oracle,
+and a symmetric Hessian-vector operator with optional diagonal preconditioning.
+It currently uses **f64**, not a generic floating-point or DD backend. It has no
+market, token, graph or economic-acceptance dependencies.
+
+This adapter requires analytic market curvature, diagonal utility curvature, and
+affine prices (`sqrt_prices = false`). At tick boundaries the regional Hessian
+is only a step model; all accepted steps still use the actual dual difference.
+Only incident markets are visited when building a block model. The Newton path
+does not silently invoke L-BFGS-B or the legacy graph/coordinate recovery.
+After a native line-search stall, the adapter can probe a bounded floating-point
+lattice neighborhood: a coupled price pair plus an independent descending
+coordinate. Every selected correction must satisfy the original Armijo decrease
+and reduce the block's worst original per-token residual ratio; all quotes and final
+verification consume the original global FG budget. Native failure remains a
+native failure; an independently acceptable result is only `Approximate`.
+
+Both supplied iteration/FG limits are respected by taking their minimum. HVPs
+have an additional global budget across all blocks and restarts. Diagnostics
+use `SolveDiagnostics<dexrouter_newton::Status>`: native termination is separate
+from economic acceptance. `hessian_products` and `hessian_evaluations` count
+Newton backend work, including rounding-repair curvature models (not preprocessing
+or legacy L-BFGS-B graph recovery).
+
+See [algorithm and contract](<../dexrouter-newton/README.md>) and
+[controlled comparisons and limitations](<tests/NEWTON_COMPARISON.md>).
+
 ## Snapshot initialization and warm starts
 
 Snapshot initialization fits pair-median log price ratios on the whole graph,
@@ -42,7 +105,8 @@ The sparse anchored least-squares fit is deterministic. Component gauges and
 log-price clipping are initialization choices only; neither becomes a solver
 constraint. The existing BFS valuation is deliberately retained for TVL pool
 selection, so changing the initializer does not change the selected markets.
-The economic solver continues to use affine prices, not exponential variables.
+The economic solver uses affine prices by default, with an opt-in convex
+square-root-price mode; neither mode uses exponential variables.
 
 For successive snapshots, reuse a checked solution by token identity:
 

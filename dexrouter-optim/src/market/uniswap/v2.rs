@@ -23,6 +23,10 @@ impl UniswapV2 {
 }
 
 impl Market for UniswapV2 {
+    fn convex_in_sqrt_prices(&self) -> bool {
+        true
+    }
+
     fn relative_curvature(&self, v: [f64; 2]) -> Option<f64> {
         let weighted = [self.reserves[0] * v[0], self.reserves[1] * v[1]];
         let active = self.fee == 1.0

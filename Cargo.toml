@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["dexrouter-arbitrage", "dexrouter-optim", "dexrouter-lbfgsb"]
+members = ["dexrouter-arbitrage", "dexrouter-optim", "dexrouter-lbfgsb", "dexrouter-newton"]
 
 [workspace.dependencies]
 anyhow = "1.0.100"

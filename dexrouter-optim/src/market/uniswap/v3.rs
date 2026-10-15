@@ -43,51 +43,68 @@ impl UniswapV3 {
     }
 
     fn local_region(&self, v: [f64; 2]) -> (i8, Option<usize>) {
-        let (_, gap_down) = sqrt_price_gap(v, self.fee, true, self.current_price);
-        let (_, gap_up) = sqrt_price_gap(v, self.fee, false, self.current_price);
-        if gap_down < 0.0 {
-            for i in self.current_tick..self.liquidity.len() {
-                if self.liquidity[i] <= 0.0 {
-                    continue;
-                }
+        let down = SqrtPriceTarget::new(v, self.fee, true);
+        if down.gap(self.current_price) < 0.0 {
+            // Most accepted points stay in the current range. Avoid a full
+            // binary search (and its log(ticks) accurate gaps) in that case.
+            let end = self
+                .lower_prices
+                .get(self.current_tick + 1)
+                .copied()
+                .unwrap_or(0.0);
+            if down.gap(end) >= 0.0 {
+                return (
+                    1,
+                    self.liquidity
+                        .get(self.current_tick)
+                        .filter(|&&l| l > 0.0)
+                        .map(|_| self.current_tick),
+                );
+            }
+            // The first range whose lower boundary reaches the target. Keep
+            // the inclusive end test: exact tick ties belong to the same
+            // adjacent range as the directional walk, including liquidity gaps.
+            let ends = self
+                .lower_prices
+                .get(self.current_tick + 1..)
+                .unwrap_or(&[]);
+            let i = self.current_tick + ends.partition_point(|&end| down.gap(end) < 0.0);
+            let region = self.liquidity.get(i).filter(|&&l| l > 0.0).and_then(|_| {
                 let start = if i == self.current_tick {
                     self.current_price
                 } else {
                     self.lower_prices[i]
                 };
-                let end = self.lower_prices.get(i + 1).copied().unwrap_or(0.0);
-                if sqrt_price_gap(v, self.fee, true, start).1 >= 0.0 {
-                    break;
-                }
-                if sqrt_price_gap(v, self.fee, true, end).1 >= 0.0 {
-                    return (1, Some(i));
-                }
+                (down.gap(start) < 0.0).then_some(i)
+            });
+            (1, region)
+        } else {
+            let up = SqrtPriceTarget::new(v, self.fee, false);
+            let gap_up = up.gap(self.current_price);
+            if gap_up.is_nan() || gap_up <= 0.0 {
+                return (0, None);
             }
-            (1, None)
-        } else if gap_up > 0.0 {
             if self.current_tick >= self.lower_prices.len().saturating_sub(1) {
                 return (0, None);
             }
-            for i in (0..=self.current_tick).rev() {
-                if self.liquidity[i] <= 0.0 {
-                    continue;
-                }
-                let start = if i == self.current_tick {
-                    self.current_price
-                } else {
-                    self.lower_prices[i + 1]
-                };
-                let end = self.lower_prices[i];
-                if sqrt_price_gap(v, self.fee, false, start).1 <= 0.0 {
-                    break;
-                }
-                if sqrt_price_gap(v, self.fee, false, end).1 <= 0.0 {
-                    return (-1, Some(i));
-                }
+            if up.gap(self.lower_prices[self.current_tick]) <= 0.0 {
+                return (
+                    -1,
+                    (self.liquidity[self.current_tick] > 0.0).then_some(self.current_tick),
+                );
             }
-            (-1, None)
-        } else {
-            (0, None)
+            let region = self.lower_prices[..=self.current_tick]
+                .partition_point(|&end| up.gap(end) <= 0.0)
+                .checked_sub(1)
+                .filter(|&i| {
+                    let start = if i == self.current_tick {
+                        self.current_price
+                    } else {
+                        self.lower_prices[i + 1]
+                    };
+                    self.liquidity[i] > 0.0 && up.gap(start) > 0.0
+                });
+            (-1, region)
         }
     }
 
@@ -141,8 +158,10 @@ impl Market for UniswapV3 {
     }
 
     fn evaluate(&self, v: [f64; 2]) -> MarketEvaluation {
-        let (_, gap_down) = sqrt_price_gap(v, self.fee, true, self.current_price);
-        let (_, gap_up) = sqrt_price_gap(v, self.fee, false, self.current_price);
+        let down = SqrtPriceTarget::new(v, self.fee, true);
+        let up = SqrtPriceTarget::new(v, self.fee, false);
+        let gap_down = down.gap(self.current_price);
+        let gap_up = up.gap(self.current_price);
 
         if gap_down < 0.0 {
             let prices = &self.lower_prices[self.current_tick..];
@@ -162,7 +181,7 @@ impl Market for UniswapV3 {
                 let pl = prices.get(i + 1).copied().unwrap_or_default();
                 let p_cur = if i > 0 { pu } else { self.current_price };
                 let range = BoundedLiquidity::new(k, p_cur, pl);
-                let trade = range.evaluate(v, self.fee, true);
+                let trade = range.evaluate(v, self.fee, true, &down);
                 let (delta0, delta1) = (trade.input[0], trade.output[1]);
                 if !initial && (delta0 == 0.0 || delta1 == 0.0) {
                     break;
@@ -208,7 +227,7 @@ impl Market for UniswapV3 {
                     self.current_price
                 };
                 let range = BoundedLiquidity::new(k, p_cur, pu);
-                let trade = range.evaluate(v, self.fee, false);
+                let trade = range.evaluate(v, self.fee, false, &up);
                 let (delta0, delta1) = (trade.output[0], trade.input[1]);
                 if !initial && (delta0 == 0.0 || delta1 == 0.0) {
                     break;
@@ -231,19 +250,39 @@ impl Market for UniswapV3 {
 
 // Retain price differences smaller than one ulp of the square root. Multiplying
 // a rounded sqrt difference by large liquidity otherwise quantizes the gradient.
-fn sqrt_price_gap(v: [f64; 2], fee: f64, token0_in: bool, start: f64) -> (f64, f64) {
-    let (a_factor, b_factor) = if token0_in { (1.0, fee) } else { (fee, 1.0) };
-    let target = ((v[0] / v[1]) * a_factor / b_factor).sqrt();
-    let a = v[0] * a_factor;
-    let a_error = v[0].mul_add(a_factor, -a);
-    let b0 = v[1] * b_factor;
-    let b0_error = v[1].mul_add(b_factor, -b0);
-    let b1 = b0 * start;
-    let b1_error = b0.mul_add(start, -b1) + b0_error * start;
-    let b = b1 * start;
-    let b_error = b1.mul_add(start, -b) + b1_error * start;
-    let gap = ((a - b) + (a_error - b_error)) / (b0 * (target + start));
-    (target, gap)
+struct SqrtPriceTarget {
+    target: f64,
+    a: f64,
+    a_error: f64,
+    b0: f64,
+    b0_error: f64,
+}
+
+impl SqrtPriceTarget {
+    // Price-only terms are invariant across every tick in a directional quote.
+    fn new(v: [f64; 2], fee: f64, token0_in: bool) -> Self {
+        let (a_factor, b_factor) = if token0_in { (1.0, fee) } else { (fee, 1.0) };
+        let target = ((v[0] / v[1]) * a_factor / b_factor).sqrt();
+        let a = v[0] * a_factor;
+        let a_error = v[0].mul_add(a_factor, -a);
+        let b0 = v[1] * b_factor;
+        let b0_error = v[1].mul_add(b_factor, -b0);
+        Self {
+            target,
+            a,
+            a_error,
+            b0,
+            b0_error,
+        }
+    }
+
+    fn gap(&self, start: f64) -> f64 {
+        let b1 = self.b0 * start;
+        let b1_error = self.b0.mul_add(start, -b1) + self.b0_error * start;
+        let b = b1 * start;
+        let b_error = b1.mul_add(start, -b) + b1_error * start;
+        ((self.a - b) + (self.a_error - b_error)) / (self.b0 * (self.target + start))
+    }
 }
 
 #[derive(Debug)]
@@ -259,8 +298,15 @@ impl BoundedLiquidity {
         Self { k, p0, p1 }
     }
 
-    fn evaluate(&self, v: [f64; 2], fee: f64, token0_in: bool) -> MarketEvaluation {
-        let (target, gap) = sqrt_price_gap(v, fee, token0_in, self.p0);
+    fn evaluate(
+        &self,
+        v: [f64; 2],
+        fee: f64,
+        token0_in: bool,
+        price: &SqrtPriceTarget,
+    ) -> MarketEvaluation {
+        let target = price.target;
+        let gap = price.gap(self.p0);
         let (distance, capacity, weight) = if token0_in {
             (-gap, self.p0 - self.p1, v[1])
         } else {
@@ -269,7 +315,7 @@ impl BoundedLiquidity {
         if distance <= 0.0 {
             return MarketEvaluation::default();
         }
-        let (_, end_gap) = sqrt_price_gap(v, fee, token0_in, self.p1);
+        let end_gap = price.gap(self.p1);
         let exhausted = if token0_in {
             end_gap <= 0.0
         } else {
@@ -339,8 +385,125 @@ mod tests {
 
     use super::{Market, UniswapV3};
 
+    impl UniswapV3 {
+        fn linear_region(&self, v: [f64; 2]) -> (i8, Option<usize>) {
+            let (_, gap_down) = original_gap(v, self.fee, true, self.current_price);
+            let (_, gap_up) = original_gap(v, self.fee, false, self.current_price);
+            if gap_down < 0.0 {
+                for i in self.current_tick..self.liquidity.len() {
+                    if self.liquidity[i] <= 0.0 {
+                        continue;
+                    }
+                    let start = if i == self.current_tick {
+                        self.current_price
+                    } else {
+                        self.lower_prices[i]
+                    };
+                    let end = self.lower_prices.get(i + 1).copied().unwrap_or(0.0);
+                    if original_gap(v, self.fee, true, start).1 >= 0.0 {
+                        break;
+                    }
+                    if original_gap(v, self.fee, true, end).1 >= 0.0 {
+                        return (1, Some(i));
+                    }
+                }
+                (1, None)
+            } else if gap_up > 0.0 {
+                if self.current_tick >= self.lower_prices.len().saturating_sub(1) {
+                    return (0, None);
+                }
+                for i in (0..=self.current_tick).rev() {
+                    if self.liquidity[i] <= 0.0 {
+                        continue;
+                    }
+                    let start = if i == self.current_tick {
+                        self.current_price
+                    } else {
+                        self.lower_prices[i + 1]
+                    };
+                    let end = self.lower_prices[i];
+                    if original_gap(v, self.fee, false, start).1 <= 0.0 {
+                        break;
+                    }
+                    if original_gap(v, self.fee, false, end).1 <= 0.0 {
+                        return (-1, Some(i));
+                    }
+                }
+                (-1, None)
+            } else {
+                (0, None)
+            }
+        }
+    }
+
+    fn original_gap(v: [f64; 2], fee: f64, token0_in: bool, start: f64) -> (f64, f64) {
+        let (af, bf) = if token0_in { (1.0, fee) } else { (fee, 1.0) };
+        let target = ((v[0] / v[1]) * af / bf).sqrt();
+        let a = v[0] * af;
+        let ae = v[0].mul_add(af, -a);
+        let b0 = v[1] * bf;
+        let be0 = v[1].mul_add(bf, -b0);
+        let b1 = b0 * start;
+        let be1 = b0.mul_add(start, -b1) + be0 * start;
+        let b = b1 * start;
+        let be = b1.mul_add(start, -b) + be1 * start;
+        (target, ((a - b) + (ae - be)) / (b0 * (target + start)))
+    }
+
     fn allclose(x: [f64; 2], y: [f64; 2]) -> bool {
         arr1(&x).abs_diff_eq(&arr1(&y), 1e-12)
+    }
+
+    #[test]
+    fn binary_regions_match_directional_walk_at_ticks_gaps_and_exhaustion() {
+        for fee in [1.0, 0.9995, 0.997, 0.99] {
+            for current in [3.0, 2.5, 2.0, 1.75, 1.0, 0.5, 0.25] {
+                for liquidity in [
+                    vec![10.0, 0.0, 20.0, 0.0, 30.0],
+                    vec![0.0; 5],
+                    vec![10.0; 4],
+                ] {
+                    let pool =
+                        UniswapV3::new(current, vec![3.0, 2.0, 1.5, 1.0, 0.5], liquidity, fee);
+                    for p in [1e-20, 0.25, 0.5, 1.0, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 1e20] {
+                        for v0 in [p * p * fee, p * p / fee] {
+                            for v0 in [v0.next_down(), v0, v0.next_up()] {
+                                for unit in [1e-12, 1.0, 1e12] {
+                                    let v = [v0 * unit, unit];
+                                    assert_eq!(
+                                        pool.local_region(v),
+                                        pool.linear_region(v),
+                                        "current={current} fee={fee} v={v:?}"
+                                    );
+                                    for direction in [true, false] {
+                                        let target = super::SqrtPriceTarget::new(v, fee, direction);
+                                        for start in [0.0, 0.5, current, 3.0] {
+                                            let (expected_target, expected_gap) =
+                                                original_gap(v, fee, direction, start);
+                                            assert_eq!(
+                                                target.target.to_bits(),
+                                                expected_target.to_bits()
+                                            );
+                                            assert_eq!(
+                                                target.gap(start).to_bits(),
+                                                expected_gap.to_bits()
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let empty = UniswapV3::new(1.0, vec![], vec![], 0.997);
+        for v0 in [0.5, 1.0, 2.0] {
+            assert_eq!(
+                empty.local_region([v0, 1.0]),
+                empty.linear_region([v0, 1.0])
+            );
+        }
     }
 
     #[test]

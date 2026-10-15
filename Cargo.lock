@@ -1621,6 +1621,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dexrouter-newton"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "argmin",
+ "argmin-math",
+ "dexrouter-lbfgsb",
+]
+
+[[package]]
 name = "dexrouter-optim"
 version = "0.1.0"
 dependencies = [
@@ -1628,6 +1638,7 @@ dependencies = [
  "argmin",
  "bigdecimal",
  "dexrouter-lbfgsb",
+ "dexrouter-newton",
  "ndarray",
  "serde",
  "serde_json",
