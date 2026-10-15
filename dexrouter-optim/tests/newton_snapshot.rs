@@ -8,10 +8,18 @@ use dexrouter_optim::{
 };
 use std::time::Instant;
 
+#[path = "support/laplacian_analysis.rs"]
+mod laplacian_analysis;
+#[path = "support/newton_conditioning.rs"]
+mod newton_conditioning;
 #[path = "support/newton_diagnostics.rs"]
 mod newton_diagnostics;
+#[path = "support/newton_improvements.rs"]
+mod newton_improvements;
 #[path = "support/newton_profile.rs"]
 mod newton_profile;
+#[path = "support/newton_resolution.rs"]
+mod newton_resolution;
 fn add((s, c): &mut (f64, f64), v: f64) {
     let n = *s + v;
     *c += if s.abs() >= v.abs() {

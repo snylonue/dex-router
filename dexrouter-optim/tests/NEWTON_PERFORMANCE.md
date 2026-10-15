@@ -225,3 +225,78 @@ inspect_snapshot_stagnation，打印最差 token、邻接池、相邻 ulp 和联
 验证：三 crate release 回归 **233 项通过**；27 条快照对照逐条独立复核；
 停滞诊断通过。fmt --check、git diff --check 和独立 Newton 全 target 严格
 clippy 均通过；路由 clippy 通过，仍有原有五条提示，未增加新提示。
+## 第四轮：曲率图预条件（显式启用）
+
+这轮改善的是 Newton **线性子问题的数值条件**，不是改变经济目标、增加
+正则惩罚、删除池或放宽容差。默认后端仍为 L-BFGS-B；新开关
+
+`dexrouter_optim::SolveOptions::newton_tree_precondition = true`
+
+仅用于显式选择的 standalone Newton，默认 **false**，保留第三轮默认路径。
+
+### 结构与稳定性
+
+- [通用内核](<../../dexrouter-newton/src/lib.rs>) 增加可选固定 SPD 逆度量接口；
+  未提供时保留原 Jacobi 算术。每次 PCG 构造一次，始终用原 HVP、活跃集、
+  局部对角阻尼和原目标 Armijo；错误和未写满／非有限输出不会被隐藏。
+- [路由树度量](<../src/tree_preconditioner.rs>) 聚合平行曲率边，再选最大权
+  支撑森林。保留效用对角、固定／当前活跃端点的接地项和 lambda*D；只在
+  逆度量中丢弃非树自由边，原 Hessian 和报价完整保留。浮动分量只在度量
+  中加一个单位根弹簧，不固定原问题的价格，也不减少优化变量。
+- 在 Jacobi 平衡坐标中做叶消元，用正接地传递
+  \(g_p += a_p g_i/(a_i+g_i)\)，而不是 parent_diag-offdiag²/diag。
+  后者会在强池旁抹掉微小的接地刚度。构造约 O(m log m)，应用 O(n)，
+  工作区复用；这些开销都计入总耗时，不等同于 HVP 免费消失。
+- 两节点控制例的强边为 1e12、弱接地为 1e-12：朴素消元确实得到零，
+  新因子保留 1e-24 的归一化接地。精确算术下，Jacobi 条件数约 4e24，
+  树度量在此树例上等于原矩阵、预条件数为 1；这不是全量快照条件数的测量。
+  同一真实二次目标、同预算下两者都 PG 收敛，HVP 为 3 对 1。
+
+### 同二进制的三轮成对比较
+
+同一初值、池、经济容差和 PG=1e-10；每轮交替 Jacobi／forest 顺序。
+计时不含编译、载入与独立验收，包含树构造／应用和现有格点修复；没有与
+其他构建任务并行。表中为三次中位数，不宣称统计显著性或其他输入的保证。
+[完整结果](<newton_performance_results.json>) 新增 forest_preconditioner 的
+18 条全精度记录，全部旧轮次保留。
+
+| 数据 | Jacobi 秒 | forest 秒 | FG（原→新） | HVP（原→新） | 模型（原→新） | 独立 KKT（原→新） |
+|---|---:|---:|---:|---:|---:|---:|
+| filtered | 0.066099 | 0.078233 | 588→570 | 1615→534 | 165→138 | 0.6202→0.8574 |
+| full | 0.267989 | 0.226215 | 1965→1033 | 7173→2073 | 297→271 | 0.4868→0.4868 |
+| full-strict | 0.307411 | 0.266203 | 2868→2012 | 7244→2125 | 333→327 | 48.5117→48.5117 |
+
+full 的 HVP 减少 **71.1%**、FG 减少 **47.4%**，耗时降低 **15.6%**（约
+1.18×）。不能把 HVP 降幅当作整体加速比。filtered 两路径的计时范围分别为
+0.064085–0.081547 / 0.064445–0.082242 秒，波动重叠；该轮 forest 中位数
+反而高 18.4%，没有稳定的 filtered 加速证据。
+
+**收敛标签同样有取舍**：filtered 从原生 PG 收敛变成 LineSearchFailed 后的
+Approximate，虽然仍通过原独立经济验收；full 两者都只是 Approximate。
+full-strict 两者都是 NumericalStagnation、仍不可用，不能把更快失败算作
+严格求解提速。这也是不开启新默认、保留显式对比开关的原因。
+
+预条件器不改变可返回的 f64 物理价格集合，不能消除第三轮定位到的格点
+障碍。严格收敛需要继续研究相对价／高精度表示和一致报价，不应靠再调宽
+经济容差或伪造原生收敛标签处理。
+
+### 验证与复现
+
+三 crate release **240 项通过**。V2 独立 primal、单位不变性、V3 跨 tick／
+零流动性／原目标差、预算和 warm start 的原有断言都在 Jacobi 与 forest
+两条路径执行；新增 SPD／掩码／阻尼／平行边／浮动分量和接口错误控制。
+18 条成对快照逐条独立验收，要求两条路径的全部非严格样本经济可用。
+通用 Newton 全 targets 严格 Clippy 通过；路由 Clippy 无新增警告。
+
+复现（默认三轮；NEWTON_CONDITIONING_REPEATS 仅供缩短诊断）：
+
+~~~sh
+cargo test --release -p dexrouter-optim --test newton_snapshot compare_newton_preconditioners -- --ignored --nocapture --test-threads=1
+~~~
+
+## 第五轮：精确消元与保留价格低位
+
+已实现 [Schur + 两字价格 Newton](<NEWTON_IMPROVEMENTS.md>)，包含八轮四配置对照、
+原目标单调性、全量严格验收和独立 90／110 位复验。历史四轮数据保持不变；
+新的 [96 条原始计数及价格证据](<newton_improvements_results.json>) 单独保存。
+Schur 预热默认仍关闭；精修始终优先尝试 Schur，不更改旧单 f64 返回契约。

@@ -71,7 +71,7 @@ anyhow::ensure!(diagnostics.is_usable(), "economic residual check failed");
 ```
 
 The generic backend accepts only a box, FG/optional accurate-difference oracle,
-and a symmetric Hessian-vector operator with optional diagonal preconditioning.
+and a symmetric Hessian-vector operator with optional diagonal or fixed SPD preconditioning.
 It currently uses **f64**, not a generic floating-point or DD backend. It has no
 market, token, graph or economic-acceptance dependencies.
 
@@ -87,6 +87,21 @@ and reduce the block's worst original per-token residual ratio; all quotes and f
 verification consume the original global FG budget. Native failure remains a
 native failure; an independently acceptable result is only `Approximate`.
 
+`SolveOptions::newton_tree_precondition = true` opts into a maximum-weight
+support-forest inverse metric for PCG. Parallel edges are aggregated; fixed/active
+endpoints contribute grounding, and positive shunts are propagated without
+subtracting nearly equal large diagonals. The original Hessian, physical prices,
+bounds, objective differences and acceptance rules are unchanged. Floating
+components receive a root spring **only in the inverse metric**, not a new price
+anchor or objective penalty. Unsupported numerical scales retain Jacobi.
+
+This option defaults to **false**: paired snapshots show much fewer HVPs and a
+faster full solve, but filtered native PG convergence becomes an independently
+usable `Approximate` result. Strict full-snapshot acceptance remains unresolved for this single-f64 return contract; see the explicit twofold-price API below.
+See [conditioning evidence and limitations](<tests/NEWTON_PERFORMANCE.md#第四轮曲率图预条件显式启用>).
+Pool-level spectra and removal counterfactuals are in the [pool analysis](<tests/LAPLACIAN_POOL_ANALYSIS.md>); these diagnostics do not change production pool selection.
+Follow-up [exact elimination and price-resolution diagnostics](<tests/NEWTON_PRECISION.md>) separate linear conditioning, quote error, price representation, and monotone acceptance.
+
 Both supplied iteration/FG limits are respected by taking their minimum. HVPs
 have an additional global budget across all blocks and restarts. Diagnostics
 use `SolveDiagnostics<dexrouter_newton::Status>`: native termination is separate
@@ -96,6 +111,54 @@ or legacy L-BFGS-B graph recovery).
 
 See [algorithm and contract](<../dexrouter-newton/README.md>) and
 [controlled comparisons and limitations](<tests/NEWTON_COMPARISON.md>).
+
+## Precise physical-price Newton (explicit hi+lo result)
+
+Use `solve_price_with_precise_newton` when rounding a correct continuous price
+invalidates the original economic check. It returns `PreciseSolveDiagnostics`,
+not a misleading successful `SolveDiagnostics.price: Array1<f64>`.
+
+~~~rust,ignore
+let options = SolveOptions {
+    newton_schur_precondition: true, // optional faster full-market f64 warm stage
+    ..Default::default()
+};
+let newton = dexrouter_newton::Options {
+    pgtol: options.optimizer.pgtol,
+    max_iterations: options.optimizer.max_iterations,
+    max_evaluations: options.optimizer.max_evaluations,
+    ..Default::default()
+};
+let result = dexrouter_optim::solve_price_with_precise_newton(
+    &route, initial_price, options, newton,
+)?;
+anyhow::ensure!(result.is_usable(), "original economic check failed");
+let (inputs, outputs) = route.arbitrage_precise(&result.price);
+let verified = route.evaluate_precise(&result.price);
+~~~
+
+Each `precision::Price` carries normalized `hi()` and `lo()` words. Both reach
+V2/V3 fee/tick decisions, quotes, stable original-objective differences, utility
+bounds, and the final full-route check. **Do not round to hi alone and reuse the
+certificate.** Custom markets/utilities explicitly implement `PreciseMarket` /
+`PreciseUtility`; there is no default implementation that discards low words.
+
+The f64 warm stage keeps the original economic tolerances and has a bounded
+work allowance (at most 2000 FG and half the shared FG budget). Refinement
+recenters affine corrections after every accepted step and always attempts
+exact degree-two Schur elimination plus an equilibrated core of at most 64
+variables. Unsupported factorizations retain safeguarded PCG. Original
+Armijo, mathematical bounds and the shared FG/iteration/HVP limits still apply.
+The generic Newton optimizer remains f64; no MP library is required at runtime.
+
+`newton_schur_precondition` controls standalone/warm f64 PCG and defaults false:
+full-market solves benefit, but filtered warm solves can regress. Precision
+refinement attempts Schur independently; the default Jacobi warm stage remains
+available without losing the ability to refine accurately. Native warm status is
+retained separately from `PreciseStatus::EconomicallyConverged`.
+
+See [implementation, measured results and limitations](<tests/NEWTON_IMPROVEMENTS.md>)
+and [preceding precision analysis](<tests/NEWTON_PRECISION.md>).
 
 ## Snapshot initialization and warm starts
 
