@@ -205,6 +205,90 @@ impl UtilityConjugate for BasketLiquidation {
     }
 }
 
+/// Explicit opt-in for utilities evaluated on the complete hi+lo physical price.
+pub trait PreciseUtility: UtilityConjugate {
+    fn precise_value(&self, p: &[crate::precision::Price]) -> f64;
+    fn precise_grad(&self, p: &[crate::precision::Price]) -> Array1<f64>;
+    fn precise_value_change(
+        &self,
+        p: &[crate::precision::Price],
+        reference: &[crate::precision::Price],
+    ) -> f64;
+    /// Exact regional diagonal, promising zero off-diagonal utility curvature.
+    fn precise_diagonal_hessian(&self, p: &[crate::precision::Price]) -> Array1<f64>;
+}
+impl PreciseUtility for NonnegativeLinear {
+    fn precise_value(&self, p: &[crate::precision::Price]) -> f64 {
+        if p.len() == self.c.len() && p.iter().zip(&self.c).all(|(&p, &c)| p >= c.into()) {
+            0.0
+        } else {
+            f64::INFINITY
+        }
+    }
+    fn precise_grad(&self, p: &[crate::precision::Price]) -> Array1<f64> {
+        Array1::from_elem(
+            p.len(),
+            if self.precise_value(p).is_finite() {
+                0.0
+            } else {
+                f64::INFINITY
+            },
+        )
+    }
+    fn precise_value_change(
+        &self,
+        p: &[crate::precision::Price],
+        r: &[crate::precision::Price],
+    ) -> f64 {
+        self.precise_value(p) - self.precise_value(r)
+    }
+    fn precise_diagonal_hessian(&self, p: &[crate::precision::Price]) -> Array1<f64> {
+        Array1::zeros(p.len())
+    }
+}
+impl PreciseUtility for BasketLiquidation {
+    fn precise_value(&self, p: &[crate::precision::Price]) -> f64 {
+        if p[self.out] < 1.0.into() {
+            return f64::INFINITY;
+        }
+        let mut sum = crate::precision::Price::from(0.0);
+        for (i, &v) in p.iter().enumerate() {
+            if i != self.out {
+                sum = sum + v * self.inputs[i].into();
+            }
+        }
+        sum.rounded()
+    }
+    fn precise_grad(&self, p: &[crate::precision::Price]) -> Array1<f64> {
+        if p[self.out] < 1.0.into() {
+            Array1::from_elem(p.len(), f64::INFINITY)
+        } else {
+            let mut g = self.inputs.clone();
+            g[self.out] = 0.0;
+            g
+        }
+    }
+    fn precise_value_change(
+        &self,
+        p: &[crate::precision::Price],
+        r: &[crate::precision::Price],
+    ) -> f64 {
+        if p[self.out] < 1.0.into() || r[self.out] < 1.0.into() {
+            return f64::INFINITY;
+        }
+        let mut sum = crate::precision::Price::from(0.0);
+        for i in 0..p.len() {
+            if i != self.out {
+                sum = sum + (p[i] - r[i]) * self.inputs[i].into();
+            }
+        }
+        sum.rounded()
+    }
+    fn precise_diagonal_hessian(&self, p: &[crate::precision::Price]) -> Array1<f64> {
+        Array1::zeros(p.len())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

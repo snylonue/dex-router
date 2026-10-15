@@ -6,6 +6,10 @@ use ndarray::Array1;
 
 use crate::{Route, RouteEvaluation, market::Market, utility::UtilityConjugate};
 
+#[path = "precise_solver.rs"]
+mod precise;
+pub use precise::{PreciseSolveDiagnostics, PreciseStatus, solve_price_with_precise_newton};
+
 #[derive(Debug, Clone)]
 pub struct SolveOptions {
     /// Generic optimizer options; applied to the normalized objective.
@@ -33,6 +37,14 @@ pub struct SolveOptions {
     pub graph_precondition: bool,
     /// Continue successful sparse Newton recovery instead of rebuilding L-BFGS history.
     pub newton_polish: bool,
+    /// Use a curvature spanning-forest inverse metric for the standalone Newton PCG.
+    /// It changes neither prices/bounds nor the objective; false keeps Jacobi.
+    pub newton_tree_precondition: bool,
+    /// Exact degree-two graph elimination for standalone/warm f64 Newton.
+    /// The separate hi+lo refinement always attempts this metric.
+    /// Uses a bounded equilibrated dense core.
+    /// A failed/oversized factorization falls back to the configured metric.
+    pub newton_schur_precondition: bool,
     /// Acceptance uses per-token turnover, never the number of pools/tokens.
     pub relative_residual_tolerance: f64,
     /// Absolute residual value in the objective's chosen price unit.
@@ -59,6 +71,8 @@ impl Default for SolveOptions {
             analytic_curvature: true,
             graph_precondition: true,
             newton_polish: true,
+            newton_tree_precondition: false,
+            newton_schur_precondition: false,
             relative_residual_tolerance: 1e-8,
             absolute_residual_value: 1e-8,
         }
@@ -181,7 +195,7 @@ pub fn solve_price_with_options<U: UtilityConjugate, M: Market>(
     options: SolveOptions,
 ) -> anyhow::Result<SolveDiagnostics> {
     Ok(
-        solve_impl(route, initial, options, None)?.map_status(|s| match s {
+        solve_impl(&route, initial, options, None)?.map_status(|s| match s {
             BackendStatus::Lbfgsb(s) => s,
             _ => unreachable!(),
         }),
@@ -200,7 +214,7 @@ pub fn solve_price_with_newton<U: UtilityConjugate, M: Market>(
     newton: dexrouter_newton::Options,
 ) -> anyhow::Result<SolveDiagnostics<dexrouter_newton::Status>> {
     Ok(
-        solve_impl(route, initial, options, Some(newton))?.map_status(|s| match s {
+        solve_impl(&route, initial, options, Some(newton))?.map_status(|s| match s {
             BackendStatus::Newton(s) => s,
             _ => unreachable!(),
         }),
@@ -244,7 +258,7 @@ fn newton_control_status(s: dexrouter_newton::Status) -> Status {
 }
 
 fn solve_impl<U: UtilityConjugate, M: Market>(
-    route: Route<U, M>,
+    route: &Route<U, M>,
     initial: Array1<f64>,
     mut options: SolveOptions,
     newton_options: Option<dexrouter_newton::Options>,
@@ -346,7 +360,7 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
             .zip(&upper)
             .map(|((&p, &l), &u)| p.max(l).min(u)),
     );
-    let blocks = optimization_blocks(&route, &lower, &upper, options.decompose);
+    let blocks = optimization_blocks(route, &lower, &upper, options.decompose);
     let mut evaluations = 0;
     let mut evaluate = |p: &Array1<f64>| -> anyhow::Result<RouteEvaluation> {
         evaluations += 1;
@@ -418,7 +432,7 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
             break;
         }
         let curvature = if options.precondition && options.analytic_curvature {
-            relative_curvature(&route, &price)
+            relative_curvature(route, &price)
         } else {
             None
         };
@@ -524,7 +538,7 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
                 options.sqrt_prices,
             );
             let (gradient, cost_change, trades) = evaluate_block(
-                &route,
+                route,
                 block,
                 &p,
                 &price,
@@ -542,7 +556,7 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
             }
             let difference = if reference.is_some() {
                 block_value_change(
-                    &route,
+                    route,
                     block,
                     &p,
                     &reference_price,
@@ -588,17 +602,18 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
                 },
                 |x| {
                     let p = physical_price(x, &block.tokens, &price, &scale, &lower, &upper, false);
-                    let curvature = relative_curvature_for_markets(
-                        &route,
-                        &p,
-                        block.markets.iter().copied(),
-                    )
-                    .ok_or_else(|| anyhow::anyhow!("analytic route curvature unavailable"))?;
+                    let curvature =
+                        relative_curvature_for_markets(route, &p, block.markets.iter().copied())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("analytic route curvature unavailable")
+                            })?;
                     Ok(BlockHessian {
                         factors: block.tokens.iter().map(|&i| scale[i] / p[i]).collect(),
                         tokens: block.tokens.clone(),
                         curvature,
                         objective_scale,
+                        tree_precondition: options.newton_tree_precondition,
+                        schur_precondition: options.newton_schur_precondition,
                     })
                 },
             )?;
@@ -644,7 +659,7 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
             && iterations < options.optimizer.max_iterations
             && evaluations + 2 <= options.optimizer.max_evaluations
             && let Some(repaired) = rounding_repair(
-                &route,
+                route,
                 block,
                 &price,
                 &current,
@@ -684,7 +699,7 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
             let graph_recovered = options.graph_precondition
                 && options.analytic_curvature
                 && graph_recovery(
-                    &route,
+                    route,
                     block,
                     &mut price,
                     &current,
@@ -695,7 +710,7 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
                 );
             if !graph_recovered {
                 coordinate_sweep(
-                    &route,
+                    route,
                     &mut price,
                     &lower,
                     &upper,
@@ -722,7 +737,7 @@ fn solve_impl<U: UtilityConjugate, M: Market>(
             {
                 let before = price.clone();
                 if !graph_recovery(
-                    &route,
+                    route,
                     block,
                     &mut price,
                     &current,
@@ -1274,6 +1289,8 @@ fn block_value_change<U: UtilityConjugate, M: Market>(
 }
 
 struct BlockHessian {
+    schur_precondition: bool,
+    tree_precondition: bool,
     curvature: RelativeCurvature,
     tokens: Vec<usize>,
     factors: Vec<f64>,
@@ -1298,6 +1315,57 @@ impl dexrouter_newton::Hessian for BlockHessian {
                     / self.objective_scale;
         }
         Ok(())
+    }
+    fn preconditioner(
+        &self,
+        metric: &[f64],
+        free: &[bool],
+        damping: f64,
+    ) -> anyhow::Result<Option<Box<dyn dexrouter_newton::Preconditioner>>> {
+        if !self.tree_precondition && !self.schur_precondition {
+            return Ok(None);
+        }
+        let mut local = vec![usize::MAX; self.curvature.diagonal.len()];
+        for (i, &token) in self.tokens.iter().enumerate() {
+            local[token] = i;
+        }
+        let edges: Vec<_> = self
+            .curvature
+            .edges
+            .iter()
+            .map(|&(a, b, w)| (local[a], local[b], w))
+            .collect();
+        let utility: Vec<_> = self
+            .tokens
+            .iter()
+            .map(|&i| self.curvature.utility_diagonal[i])
+            .collect();
+        if self.schur_precondition
+            && let Some(p) = crate::schur_preconditioner::SchurPreconditioner::new(
+                &edges,
+                &utility,
+                &self.factors,
+                self.objective_scale,
+                metric,
+                free,
+                damping,
+            )
+        {
+            return Ok(Some(Box::new(p)));
+        }
+        if !self.tree_precondition {
+            return Ok(None);
+        }
+        Ok(crate::tree_preconditioner::TreePreconditioner::new(
+            &edges,
+            &utility,
+            &self.factors,
+            self.objective_scale,
+            metric,
+            free,
+            damping,
+        )
+        .map(|p| Box::new(p) as Box<dyn dexrouter_newton::Preconditioner>))
     }
 }
 
@@ -1975,6 +2043,72 @@ mod tests {
     }
 
     #[test]
+    fn forest_metric_recovers_a_weak_mode_hidden_by_strong_liquidity() {
+        let solve = |tree| {
+            let w = 1e12;
+            let weak = 1e-12;
+            dexrouter_newton::minimize(
+                vec![0.0, 0.0],
+                vec![dexrouter_newton::Bound::unbounded(); 2],
+                dexrouter_newton::Options {
+                    pgtol: 1e-24,
+                    max_iterations: 50,
+                    max_evaluations: 500,
+                    max_hessian_products: 500,
+                    ..Default::default()
+                },
+                |x, g, r| {
+                    let edge = x[0] - x[1];
+                    g[0] = w * edge + weak * (x[0] - 1.0);
+                    g[1] = -w * edge;
+                    let change = r.map_or(0.0, |r| {
+                        0.5 * w * (edge - (r[0] - r[1])) * (edge + r[0] - r[1])
+                            + 0.5 * weak * (x[0] - r[0]) * (x[0] + r[0] - 2.0)
+                    });
+                    Ok(dexrouter_newton::Evaluation::with_difference(
+                        0.5 * w * edge * edge + 0.5 * weak * (x[0] - 1.0).powi(2),
+                        change,
+                    ))
+                },
+                |_| {
+                    Ok(BlockHessian {
+                        tree_precondition: tree,
+                        schur_precondition: false,
+                        curvature: RelativeCurvature {
+                            utility_diagonal: vec![weak, 0.0],
+                            diagonal: vec![w + weak, w],
+                            edges: vec![(0, 1, w)],
+                        },
+                        tokens: vec![0, 1],
+                        factors: vec![1.0, 1.0],
+                        objective_scale: 1.0,
+                    })
+                },
+            )
+            .unwrap()
+        };
+        let jacobi = solve(false);
+        let tree = solve(true);
+        println!(
+            "weak-mode jacobi={:?} HVP={} PG={} tree={:?} HVP={} PG={}",
+            jacobi.status,
+            jacobi.hessian_products,
+            jacobi.projected_gradient_inf_norm,
+            tree.status,
+            tree.hessian_products,
+            tree.projected_gradient_inf_norm
+        );
+        assert_eq!(
+            tree.status,
+            dexrouter_newton::Status::ConvergedProjectedGradient
+        );
+        assert!(tree.hessian_products < jacobi.hessian_products);
+        for p in tree.x {
+            assert!((p - 1.0).abs() < 1e-12);
+        }
+    }
+
+    #[test]
     fn block_hessian_matches_gradient_differences_and_masks_fixed_prices() {
         use crate::market::UniswapV3;
         use dexrouter_newton::Hessian;
@@ -1993,6 +2127,8 @@ mod tests {
                 tokens: vec![1, 2],
                 factors: vec![scale[1] / p[1], scale[2] / p[2]],
                 objective_scale: 11.0,
+                tree_precondition: true,
+                schur_precondition: false,
             };
             let v = [0.3, -0.2];
             let mut hv = [0.0; 2];

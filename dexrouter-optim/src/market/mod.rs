@@ -52,6 +52,19 @@ pub trait Market {
     }
 }
 
+/// Explicit opt-in: custom markets must not silently discard price low words.
+pub trait PreciseMarket: Market {
+    fn evaluate_precise(&self, v: [crate::precision::Price; 2]) -> MarketEvaluation;
+    fn relative_curvature_precise(&self, v: [crate::precision::Price; 2]) -> Option<f64>;
+    fn value_change_precise(
+        &self,
+        v: [crate::precision::Price; 2],
+        reference: [crate::precision::Price; 2],
+        trade: MarketEvaluation,
+        reference_trade: MarketEvaluation,
+    ) -> f64;
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Market, UniswapV2, UniswapV3};

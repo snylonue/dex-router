@@ -43,7 +43,15 @@ impl UniswapV3 {
     }
 
     fn local_region(&self, v: [f64; 2]) -> (i8, Option<usize>) {
-        let down = SqrtPriceTarget::new(v, self.fee, true);
+        self.region_targets(SqrtPriceTarget::new(v, self.fee, true), || {
+            SqrtPriceTarget::new(v, self.fee, false)
+        })
+    }
+    fn region_targets(
+        &self,
+        down: SqrtPriceTarget,
+        up: impl FnOnce() -> SqrtPriceTarget,
+    ) -> (i8, Option<usize>) {
         if down.gap(self.current_price) < 0.0 {
             // Most accepted points stay in the current range. Avoid a full
             // binary search (and its log(ticks) accurate gaps) in that case.
@@ -79,7 +87,7 @@ impl UniswapV3 {
             });
             (1, region)
         } else {
-            let up = SqrtPriceTarget::new(v, self.fee, false);
+            let up = up();
             let gap_up = up.gap(self.current_price);
             if gap_up.is_nan() || gap_up <= 0.0 {
                 return (0, None);
@@ -108,58 +116,12 @@ impl UniswapV3 {
         }
     }
 
-    pub fn lower_prices(&self) -> &[f64] {
-        &self.lower_prices
-    }
-}
-
-impl Market for UniswapV3 {
-    fn relative_curvature(&self, v: [f64; 2]) -> Option<f64> {
-        let region = self.local_region(v);
-        let liquidity = region.1.map_or_else(
-            || {
-                if region.0 == 0 && self.fee == 1.0 {
-                    self.liquidity
-                        .get(self.current_tick)
-                        .copied()
-                        .unwrap_or(0.0)
-                } else {
-                    0.0
-                }
-            },
-            |i| self.liquidity[i],
-        );
-        Some(0.5 * liquidity / self.fee.sqrt() * v[0].sqrt() * v[1].sqrt())
-    }
-
-    fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
-        let trade = self.evaluate(v);
-        (trade.input, trade.output)
-    }
-
-    fn value_change(
+    fn evaluate_targets(
         &self,
         v: [f64; 2],
-        reference_v: [f64; 2],
-        trade: MarketEvaluation,
-        reference: MarketEvaluation,
-    ) -> f64 {
-        let region = self.local_region(v);
-        if region == self.local_region(reference_v) {
-            let linear = (reference.output[0] - reference.input[0]) * (v[0] - reference_v[0])
-                + (reference.output[1] - reference.input[1]) * (v[1] - reference_v[1]);
-            let remainder = region.1.map_or(0.0, |i| {
-                self.liquidity[i] / self.fee.sqrt() * super::support_remainder(v, reference_v)
-            });
-            linear + remainder
-        } else {
-            trade.value - reference.value
-        }
-    }
-
-    fn evaluate(&self, v: [f64; 2]) -> MarketEvaluation {
-        let down = SqrtPriceTarget::new(v, self.fee, true);
-        let up = SqrtPriceTarget::new(v, self.fee, false);
+        down: SqrtPriceTarget,
+        up: SqrtPriceTarget,
+    ) -> MarketEvaluation {
         let gap_down = down.gap(self.current_price);
         let gap_up = up.gap(self.current_price);
 
@@ -246,6 +208,180 @@ impl Market for UniswapV3 {
             Default::default()
         }
     }
+
+    pub fn lower_prices(&self) -> &[f64] {
+        &self.lower_prices
+    }
+}
+
+impl Market for UniswapV3 {
+    fn relative_curvature(&self, v: [f64; 2]) -> Option<f64> {
+        let region = self.local_region(v);
+        let liquidity = region.1.map_or_else(
+            || {
+                if region.0 == 0 && self.fee == 1.0 {
+                    self.liquidity
+                        .get(self.current_tick)
+                        .copied()
+                        .unwrap_or(0.0)
+                } else {
+                    0.0
+                }
+            },
+            |i| self.liquidity[i],
+        );
+        Some(0.5 * liquidity / self.fee.sqrt() * v[0].sqrt() * v[1].sqrt())
+    }
+
+    fn arbitrage(&self, v: [f64; 2]) -> ([f64; 2], [f64; 2]) {
+        let trade = self.evaluate(v);
+        (trade.input, trade.output)
+    }
+
+    fn value_change(
+        &self,
+        v: [f64; 2],
+        reference_v: [f64; 2],
+        trade: MarketEvaluation,
+        reference: MarketEvaluation,
+    ) -> f64 {
+        let region = self.local_region(v);
+        if region == self.local_region(reference_v) {
+            let linear = (reference.output[0] - reference.input[0]) * (v[0] - reference_v[0])
+                + (reference.output[1] - reference.input[1]) * (v[1] - reference_v[1]);
+            let remainder = region.1.map_or(0.0, |i| {
+                self.liquidity[i] / self.fee.sqrt() * super::support_remainder(v, reference_v)
+            });
+            linear + remainder
+        } else {
+            trade.value - reference.value
+        }
+    }
+
+    fn evaluate(&self, v: [f64; 2]) -> MarketEvaluation {
+        self.evaluate_targets(
+            v,
+            SqrtPriceTarget::new(v, self.fee, true),
+            SqrtPriceTarget::new(v, self.fee, false),
+        )
+    }
+}
+
+impl UniswapV3 {
+    fn precise_region(&self, v: [crate::precision::Price; 2]) -> (i8, Option<usize>) {
+        self.region_targets(SqrtPriceTarget::precise(v, self.fee, true), || {
+            SqrtPriceTarget::precise(v, self.fee, false)
+        })
+    }
+    // Only the region-crossing difference pays for twofold square roots.
+    fn precise_support(&self, v: [crate::precision::Price; 2]) -> crate::precision::Price {
+        use crate::precision::Price as P;
+        fn range(v1: P, fee: f64, k: f64, start: f64, bound: f64, target: P, down: bool) -> P {
+            let s = P::from(start);
+            let b = P::from(bound);
+            if (down && target >= s) || (!down && target <= s) {
+                return 0.0.into();
+            }
+            let exhausted = if down { target <= b } else { target >= b };
+            let end = if exhausted { b } else { target };
+            let d = (end - s).abs();
+            let boundary = if exhausted {
+                (end - target).abs() * (end + target) / end
+            } else {
+                0.0.into()
+            };
+            P::from(k) * (if down { v1 } else { v1 / fee.into() }) * d * (d + boundary) / s
+        }
+        let down = (v[0] / (v[1] * self.fee.into())).sqrt();
+        let up = (v[0] * self.fee.into() / v[1]).sqrt();
+        let mut sum = P::from(0.0);
+        if down < self.current_price.into() {
+            for i in self.current_tick..self.liquidity.len() {
+                if self.liquidity[i] <= 0.0 {
+                    continue;
+                }
+                let start = if i == self.current_tick {
+                    self.current_price
+                } else {
+                    self.lower_prices[i]
+                };
+                if down >= start.into() {
+                    break;
+                }
+                let bound = self.lower_prices.get(i + 1).copied().unwrap_or(0.0);
+                sum = sum + range(v[1], self.fee, self.liquidity[i], start, bound, down, true);
+            }
+        } else if up > self.current_price.into()
+            && self.current_tick < self.lower_prices.len().saturating_sub(1)
+        {
+            for i in (0..=self.current_tick).rev() {
+                if self.liquidity[i] <= 0.0 {
+                    continue;
+                }
+                let start = if i == self.current_tick {
+                    self.current_price
+                } else {
+                    self.lower_prices[i + 1]
+                };
+                if up <= start.into() {
+                    break;
+                }
+                sum = sum
+                    + range(
+                        v[1],
+                        self.fee,
+                        self.liquidity[i],
+                        start,
+                        self.lower_prices[i],
+                        up,
+                        false,
+                    );
+            }
+        }
+        sum
+    }
+}
+impl crate::market::PreciseMarket for UniswapV3 {
+    fn evaluate_precise(&self, v: [crate::precision::Price; 2]) -> MarketEvaluation {
+        self.evaluate_targets(
+            v.map(|p| p.hi()),
+            SqrtPriceTarget::precise(v, self.fee, true),
+            SqrtPriceTarget::precise(v, self.fee, false),
+        )
+    }
+    fn relative_curvature_precise(&self, v: [crate::precision::Price; 2]) -> Option<f64> {
+        let region = self.precise_region(v);
+        let k = region.1.map(|i| self.liquidity[i]).unwrap_or_else(|| {
+            if region.0 == 0 && self.fee == 1.0 {
+                self.liquidity
+                    .get(self.current_tick)
+                    .copied()
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            }
+        });
+        Some(0.5 * k / self.fee.sqrt() * v[0].hi().sqrt() * v[1].hi().sqrt())
+    }
+    fn value_change_precise(
+        &self,
+        v: [crate::precision::Price; 2],
+        r: [crate::precision::Price; 2],
+        _: MarketEvaluation,
+        re: MarketEvaluation,
+    ) -> f64 {
+        let region = self.precise_region(v);
+        if region == self.precise_region(r) {
+            let linear = (re.output[0] - re.input[0]) * (v[0] - r[0]).rounded()
+                + (re.output[1] - re.input[1]) * (v[1] - r[1]).rounded();
+            linear
+                + region.1.map_or(0.0, |i| {
+                    self.liquidity[i] / self.fee.sqrt() * crate::precision::support_remainder(v, r)
+                })
+        } else {
+            (self.precise_support(v) - self.precise_support(r)).rounded()
+        }
+    }
 }
 
 // Retain price differences smaller than one ulp of the square root. Multiplying
@@ -274,6 +410,14 @@ impl SqrtPriceTarget {
             b0,
             b0_error,
         }
+    }
+
+    fn precise(v: [crate::precision::Price; 2], fee: f64, token0_in: bool) -> Self {
+        let mut result = Self::new(v.map(|p| p.hi()), fee, token0_in);
+        let (a, b) = if token0_in { (1.0, fee) } else { (fee, 1.0) };
+        result.a_error += v[0].lo() * a;
+        result.b0_error += v[1].lo() * b;
+        result
     }
 
     fn gap(&self, start: f64) -> f64 {

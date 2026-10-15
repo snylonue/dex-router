@@ -96,6 +96,88 @@ impl Market for UniswapV2 {
     }
 }
 
+impl UniswapV2 {
+    fn precise_support(&self, v: [crate::precision::Price; 2]) -> crate::precision::Price {
+        let w = [
+            v[0] * self.reserves[0].into(),
+            v[1] * self.reserves[1].into(),
+        ];
+        for (i, o) in [(0, 1), (1, 0)] {
+            if w[o] * self.fee.into() > w[i] {
+                let d = w[o].sqrt() - (w[i] / self.fee.into()).sqrt();
+                return d * d;
+            }
+        }
+        0.0.into()
+    }
+}
+impl crate::market::PreciseMarket for UniswapV2 {
+    fn evaluate_precise(&self, v: [crate::precision::Price; 2]) -> MarketEvaluation {
+        let mut t = MarketEvaluation::default();
+        let w = [
+            v[0] * self.reserves[0].into(),
+            v[1] * self.reserves[1].into(),
+        ];
+        for (i, o) in [(0, 1), (1, 0)] {
+            if w[o] * self.fee.into() > w[i] {
+                let a = w[o].hi().sqrt();
+                let b = (w[i] / self.fee.into()).hi().sqrt();
+                let d = (w[o] - w[i] / self.fee.into()).rounded() / (a + b);
+                t.input[i] = self.reserves[i] / self.fee * (d / b);
+                t.output[o] = self.reserves[o] * (d / a);
+                t.value = d * d;
+                break;
+            }
+        }
+        t
+    }
+    fn relative_curvature_precise(&self, v: [crate::precision::Price; 2]) -> Option<f64> {
+        let w = [
+            v[0] * self.reserves[0].into(),
+            v[1] * self.reserves[1].into(),
+        ];
+        Some(
+            if self.fee == 1.0 || w[1] * self.fee.into() > w[0] || w[0] * self.fee.into() > w[1] {
+                0.5 * self.reserves[0].sqrt() * self.reserves[1].sqrt() / self.fee.sqrt()
+                    * v[0].hi().sqrt()
+                    * v[1].hi().sqrt()
+            } else {
+                0.0
+            },
+        )
+    }
+    fn value_change_precise(
+        &self,
+        v: [crate::precision::Price; 2],
+        r: [crate::precision::Price; 2],
+        t: MarketEvaluation,
+        re: MarketEvaluation,
+    ) -> f64 {
+        let direction = |t: MarketEvaluation| {
+            if t.input[0] > 0.0 {
+                1
+            } else if t.input[1] > 0.0 {
+                -1
+            } else {
+                0
+            }
+        };
+        if direction(t) == direction(re) {
+            let linear = (re.output[0] - re.input[0]) * (v[0] - r[0]).rounded()
+                + (re.output[1] - re.input[1]) * (v[1] - r[1]).rounded();
+            linear
+                + if direction(t) == 0 {
+                    0.0
+                } else {
+                    self.reserves[0].sqrt() * self.reserves[1].sqrt() / self.fee.sqrt()
+                        * crate::precision::support_remainder(v, r)
+                }
+        } else {
+            (self.precise_support(v) - self.precise_support(r)).rounded()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ndarray::arr1;
