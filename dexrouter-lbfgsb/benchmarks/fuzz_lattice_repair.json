@@ -1,0 +1,379 @@
+{
+  "scope": "Two additional literal f32 witnesses fixed; no all-fuzz-green or new C speedup claim",
+  "baseline_commit": "e156f205dbd948b73d03a5892b0476b45ac75b7d",
+  "source_schema": "all-rust-src+manifests-v2",
+  "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+  "literal_files_sha256": {
+    "dexrouter-lbfgsb/tests/discovery_repros.rs": "bcbd751d2537a8da3ae4fc2418276f874a36bffc2d74dbfffc5628fa358e0c66",
+    "dexrouter-lbfgsb/tests/restart_repros.rs": "ce9befabf60467d4d640d637e4e5af91bc94c981947b891bf82f161b7c2746c5"
+  },
+  "red_controls": [
+    {
+      "test": "over_stiff_history_must_not_hide_a_descending_single_ulp_neighbor",
+      "expected_failure_exit": 101,
+      "exit_code": 101
+    },
+    {
+      "test": "empty_model_must_not_lose_bounded_motion_despite_a_resolved_free_slope",
+      "expected_failure_exit": 101,
+      "exit_code": 101
+    }
+  ],
+  "new_literals": [
+    {
+      "name": "over_stiff_history_must_not_hide_a_descending_single_ulp_neighbor",
+      "before_fg": 67,
+      "before_residual": 6.1023980379104614e-05,
+      "after_fg": 30,
+      "after_residual": 0
+    },
+    {
+      "name": "empty_model_must_not_lose_bounded_motion_despite_a_resolved_free_slope",
+      "before_fg": 26,
+      "before_residual": 6.017885208129883,
+      "after_fg": 438,
+      "after_residual": 0
+    }
+  ],
+  "kernel_validation": [
+    {
+      "name": "debug",
+      "argv": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "dexrouter-lbfgsb",
+        "-p",
+        "dexrouter-optim"
+      ],
+      "exit_code": 0,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false,
+      "passed": 187,
+      "ignored": 12
+    },
+    {
+      "name": "release",
+      "argv": [
+        "cargo",
+        "test",
+        "--release",
+        "--offline",
+        "-p",
+        "dexrouter-lbfgsb",
+        "-p",
+        "dexrouter-optim"
+      ],
+      "exit_code": 0,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false,
+      "passed": 187,
+      "ignored": 12
+    },
+    {
+      "name": "clippy",
+      "argv": [
+        "cargo",
+        "clippy",
+        "--offline",
+        "-p",
+        "dexrouter-lbfgsb",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "fmt",
+      "argv": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false,
+      "passed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "literals",
+      "argv": [
+        "cargo",
+        "test",
+        "--release",
+        "--offline",
+        "-p",
+        "dexrouter-lbfgsb",
+        "--test",
+        "discovery_repros",
+        "--test",
+        "restart_repros",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false,
+      "passed": 7,
+      "ignored": 0
+    },
+    {
+      "name": "search-f32",
+      "exit_code": 101,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false
+    },
+    {
+      "name": "search-f64",
+      "exit_code": 0,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false
+    },
+    {
+      "name": "scale-f32",
+      "exit_code": 101,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false
+    },
+    {
+      "name": "scale-f64",
+      "exit_code": 0,
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false
+    }
+  ],
+  "unresolved_f32_discoveries": [
+    {
+      "mode": "search-f32",
+      "exit_code": 101,
+      "evaluations": 31,
+      "roundoff_limited": true,
+      "classification": "different unresolved candidate; roundoff flag is not exoneration",
+      "case": "Case { coordinates: [Coordinate { target: 19, start: -27, bound: 6, margin: 6, normal: 6 }, Coordinate { target: 3, start: 26, bound: 2, margin: 12, normal: 4 }, Coordinate { target: 23, start: -26, bound: 0, margin: 12, normal: 8 }], terms: [Term { row: [-2, 1, 0], shift: 0, exponent: 6, hinge: false }, Term { row: [-2, -2, -2], shift: 0, exponent: 12, hinge: false }, Term { row: [1, 0, 1], shift: 0, exponent: -8, hinge: false }, Term { row: [2, -2, 0], shift: 2, exponent: -3, hinge: true }, Term { row: [0, -2, 2], shift: 1, exponent: 1, hinge: true }, Term { row: [1, -2, -1], shift: 0, exponent: 2, hinge: false }, Term { row: [-1, 1, 2], shift: 3, exponent: 4, hinge: false }], scale: 4, mu: -2, offset: None, memory: 1 }",
+      "log": "target/fuzz-lattice-validation-1791971491878385896/search-f32.log"
+    },
+    {
+      "mode": "scale-f32",
+      "exit_code": 101,
+      "evaluations": 606,
+      "roundoff_limited": true,
+      "classification": "different unresolved candidate; roundoff flag is not exoneration",
+      "case": "Case { coordinates: [Coordinate { target: 7, start: -18, bound: 0, margin: 2, normal: 3 }, Coordinate { target: 24, start: 18, bound: 7, margin: 2, normal: 4 }, Coordinate { target: 10, start: 29, bound: 8, margin: 16, normal: 8 }, Coordinate { target: -12, start: 1, bound: 2, margin: 1, normal: 8 }, Coordinate { target: 7, start: -26, bound: 2, margin: 8, normal: 8 }, Coordinate { target: -23, start: 1, bound: 0, margin: 3, normal: 6 }], terms: [Term { row: [-1, 2, 1, -1, 0, -1], shift: 0, exponent: 11, hinge: false }, Term { row: [-1, 0, 0, 0, 2, 0], shift: 0, exponent: -2, hinge: false }, Term { row: [-1, 0, 0, 1, 0, 1], shift: 0, exponent: -6, hinge: false }, Term { row: [-1, 1, 0, 0, 0, 0], shift: 0, exponent: 5, hinge: true }, Term { row: [0, 1, 0, 0, 0, 0], shift: 0, exponent: -2, hinge: false }], scale: 80, mu: 0, offset: None, memory: 1 }",
+      "log": "target/fuzz-lattice-validation-1791971491878385896/scale-f32.log"
+    }
+  ],
+  "user_preprocessed_audit": {
+    "scope": "Recovered ORIGINAL preprocessed path only, 3 repeats of one input; no raw/C timing claim",
+    "method": "Post-decision observation of existing DD samples; Decimal100 independent sums, zero absolute slack",
+    "manifest": {
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "binary_sha256": "543968019e82580d2ec53bea8eaee074a29547db126f737c5a186ac6fba1875e",
+      "module_hashes": {
+        "memory.rs": "0a38af390c898f50efa66eb63b3fde6348eea932ab976bc17ba441d2b2b85158",
+        "regression_tests.rs": "cc27b666fb65553ec8783d922494552881e0931c86434ab0a4e1ef8517520d39",
+        "cauchy.rs": "483116a667c5e03cfb407203949231a24f62c0a360a4f38a225c1d541923f169",
+        "cubic.rs": "614926f77c7fd878b284a7327e6b95f6191c8095dfc3e3febeb368745503bbba",
+        "solver.rs": "a3fb0aeee5b06a210b86694f8e4edb01c5a48470e3e1380c8faaad285f11b4cb",
+        "memory_compact_tests.rs": "41dd1653c35211790e671752d00dca28dbb604cd6f6b74788b662a3fa13cba82",
+        "subspace.rs": "047ff7ab4e8466581f9bf07922a8dccd9ad5a053c0309f2945d34dcd3b6704f7",
+        "memory_tests.rs": "032f975f4a7d9319524b7d03a26fdf89303b8802e6eb01a44667fd56636b6e7e",
+        "lib.rs": "b3ff7afccb95cb105e795d310d3872a55a07ec4c3a4074695b56e0aaaa172d6c",
+        "bounds.rs": "fb20dc95bb3297226d51ec7d0721007bc8a85bd4199d546f23a16682703c5d9a",
+        "line_search.rs": "257e181117d0282aefcf657477b738cc8ce68a2ece9031b8a96690f07d025e39",
+        "subspace_benchmarks.rs": "2fa628db11001128932da03c0feedaec96e567c4aa3f97055c6fc40f9237daba",
+        "compact.rs": "503b565699ed8ee5afedd9efbfe9c93eb4cdcb2c257d74f5ed610c0489a17312"
+      },
+      "archive": "/home/snylonue/.dsh/attachments/v1/files/cc/ccbd2918a5e8e88924670823a4512bc7fc1dd06b38cbd666a23710ad1f25bccc/hermes-minimize-integration-20261013.zip",
+      "archive_sha256": "ccbd2918a5e8e88924670823a4512bc7fc1dd06b38cbd666a23710ad1f25bccc",
+      "archive_non_kernel_changes": [
+        "Cargo.toml",
+        "src/strategy/precision_newton.rs"
+      ],
+      "no_default_features": true,
+      "observer_after_original_terminal_checks": true,
+      "scope": "original preprocessed entry only; not reconstructed raw/C bridge",
+      "build_argv": [
+        "cargo",
+        "build",
+        "--release",
+        "--offline",
+        "--locked",
+        "--no-default-features",
+        "--bin",
+        "hermes_minimize_snapshot"
+      ]
+    },
+    "cases": [
+      {
+        "repeat": 0,
+        "strict_dd_passed": true,
+        "warm": {
+          "backend": "local minimize-only routing adapter",
+          "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+          "elapsed_ms": 449.29501500000003,
+          "status": "ConvergedProjectedGradient",
+          "assessment": "Converged",
+          "upstream_usable": true,
+          "line_search_failure": null,
+          "iterations": 1845,
+          "evaluations": 30133,
+          "restarts": 7,
+          "optimizer_variables": 606,
+          "optimization_blocks": 267,
+          "tokens": 607,
+          "markets": 994,
+          "objective": 3.4416388662132453,
+          "original_final_objective": 3.441638866213244,
+          "max_projected_gradient": 15577688.89453125,
+          "max_kkt_residual_ratio": 0.5221239236333025,
+          "max_deficit_ratio": 0.5221239236333025,
+          "objective_scale": 1.0,
+          "bounds_unchanged": true,
+          "original_trade_and_turnover_finite": true,
+          "market_evaluate_calls_including_adapter_verification": 3234947,
+          "dd_curvature_calls": 14910,
+          "unknown_curvature_calls": 0,
+          "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+        },
+        "warm_numerical_state_matches_historical": true,
+        "dd_updates": 1,
+        "max_relative_flow_residual": "1.474784313663144295397944958644650565200798742852734847381802497297221678462527787379390666116355102E-10",
+        "scaled_gradient_max": "5.907046516377507735168676690156621255874744445050559715684663370336613034302329185268249145961100190E-20",
+        "execution_admission": "no_admissible_candidate",
+        "audit_content_sha256": "e63a074e7828e09a726b471c5206d6c20b2ae6cabde3ebe5a2150049986da7e8"
+      },
+      {
+        "repeat": 1,
+        "strict_dd_passed": true,
+        "warm": {
+          "backend": "local minimize-only routing adapter",
+          "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+          "elapsed_ms": 451.15997400000003,
+          "status": "ConvergedProjectedGradient",
+          "assessment": "Converged",
+          "upstream_usable": true,
+          "line_search_failure": null,
+          "iterations": 1845,
+          "evaluations": 30133,
+          "restarts": 7,
+          "optimizer_variables": 606,
+          "optimization_blocks": 267,
+          "tokens": 607,
+          "markets": 994,
+          "objective": 3.4416388662132453,
+          "original_final_objective": 3.441638866213244,
+          "max_projected_gradient": 15577688.89453125,
+          "max_kkt_residual_ratio": 0.5221239236333025,
+          "max_deficit_ratio": 0.5221239236333025,
+          "objective_scale": 1.0,
+          "bounds_unchanged": true,
+          "original_trade_and_turnover_finite": true,
+          "market_evaluate_calls_including_adapter_verification": 3234947,
+          "dd_curvature_calls": 14910,
+          "unknown_curvature_calls": 0,
+          "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+        },
+        "warm_numerical_state_matches_historical": true,
+        "dd_updates": 1,
+        "max_relative_flow_residual": "1.474784313663144295397944958644650565200798742852734847381802497297221678462527787379390666116355102E-10",
+        "scaled_gradient_max": "5.907046516377507735168676690156621255874744445050559715684663370336613034302329185268249145961100190E-20",
+        "execution_admission": "no_admissible_candidate",
+        "audit_content_sha256": "e63a074e7828e09a726b471c5206d6c20b2ae6cabde3ebe5a2150049986da7e8"
+      },
+      {
+        "repeat": 2,
+        "strict_dd_passed": true,
+        "warm": {
+          "backend": "local minimize-only routing adapter",
+          "commit": "712835dda304b084f19fe6ee728bb7b3d58343b0",
+          "elapsed_ms": 450.109594,
+          "status": "ConvergedProjectedGradient",
+          "assessment": "Converged",
+          "upstream_usable": true,
+          "line_search_failure": null,
+          "iterations": 1845,
+          "evaluations": 30133,
+          "restarts": 7,
+          "optimizer_variables": 606,
+          "optimization_blocks": 267,
+          "tokens": 607,
+          "markets": 994,
+          "objective": 3.4416388662132453,
+          "original_final_objective": 3.441638866213244,
+          "max_projected_gradient": 15577688.89453125,
+          "max_kkt_residual_ratio": 0.5221239236333025,
+          "max_deficit_ratio": 0.5221239236333025,
+          "objective_scale": 1.0,
+          "bounds_unchanged": true,
+          "original_trade_and_turnover_finite": true,
+          "market_evaluate_calls_including_adapter_verification": 3234947,
+          "dd_curvature_calls": 14910,
+          "unknown_curvature_calls": 0,
+          "policy": "diagnostic warm prices only; original coordinate20 and DD32 remain authoritative"
+        },
+        "warm_numerical_state_matches_historical": true,
+        "dd_updates": 1,
+        "max_relative_flow_residual": "1.474784313663144295397944958644650565200798742852734847381802497297221678462527787379390666116355102E-10",
+        "scaled_gradient_max": "5.907046516377507735168676690156621255874744445050559715684663370336613034302329185268249145961100190E-20",
+        "execution_admission": "no_admissible_candidate",
+        "audit_content_sha256": "e63a074e7828e09a726b471c5206d6c20b2ae6cabde3ebe5a2150049986da7e8"
+      }
+    ],
+    "strict_dd_passed": true
+  },
+  "audit_negative_controls": [
+    {
+      "negative": "binary SHA mismatch",
+      "rejected": true,
+      "detail": ""
+    },
+    {
+      "negative": "source SHA mismatch",
+      "rejected": true,
+      "detail": "solver.rs"
+    },
+    {
+      "negative": "false DD success with bad flow",
+      "rejected": true,
+      "detail": ""
+    },
+    {
+      "negative": "invalid anchor",
+      "rejected": true,
+      "detail": ""
+    },
+    {
+      "negative": "unexpected execution admission",
+      "rejected": true,
+      "detail": ""
+    }
+  ],
+  "background_checkpoint": {
+    "fixed_source_batches": 45,
+    "ordinary": 23,
+    "extreme_safety": 22,
+    "nonzero_exits": 0,
+    "last_record": {
+      "session": "1791971101315396270",
+      "source_schema": "all-rust-src+manifests-v2",
+      "source_hash": "1a6e4044d84017c584253b989faea4dd1256b4845e6699bf3d660c24a96468cd",
+      "changed_during_batch": false,
+      "batch": 84,
+      "mode": "ordinary",
+      "seed": 20270084,
+      "cases": 65536,
+      "exit_code": 0,
+      "batch_seconds": 7.834,
+      "elapsed_seconds": 714.097,
+      "log": "target/convex-fuzz-live/1791971101315396270-00084-ordinary-20270084.log"
+    }
+  }
+}

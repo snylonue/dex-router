@@ -95,6 +95,11 @@ where
             return Ok(outcome);
         }
         if let Some(b) = &bracket {
+            if b.only_rejected_lattice_points(x0, direction, bounds, f0, derphi0, options.wolfe_c2)
+            {
+                outcome.failure = Some(LineSearchFailure::NumericalStagnation);
+                return Ok(outcome);
+            }
             let width = (b.high_step - b.low_step).abs();
             // Clipping interpolation to 10% of the interval does not guarantee
             // useful progress: it can repeatedly move the same endpoint while
@@ -374,6 +379,47 @@ struct ZoomBracket<T> {
 }
 
 impl<T: Float + FromPrimitive> ZoomBracket<T> {
+    // Monotonic rounded ray coordinates leave no third point when the endpoint
+    // vectors are identical or differ in just one adjacent coordinate. Only
+    // terminate if both known points are unusable at EVERY interior parameter:
+    // x0, a value above f0, or a slope that fails the original curvature test.
+    // Equal points alone are insufficient: Armijo still depends on the parameter.
+    fn only_rejected_lattice_points(
+        &self,
+        x0: &[T],
+        direction: &[T],
+        bounds: &[Bound<T>],
+        f0: T,
+        derphi0: T,
+        c2: T,
+    ) -> bool {
+        let mut changes = 0;
+        let mut low_is_origin = true;
+        let mut high_is_origin = true;
+        for ((&x, &d), b) in x0.iter().zip(direction).zip(bounds) {
+            let low = b.project(x + self.low_step * d);
+            let high = b.project(x + self.high_step * d);
+            if !low.is_finite() || !high.is_finite() {
+                return false;
+            }
+            low_is_origin &= low == x;
+            high_is_origin &= high == x;
+            if low != high {
+                changes += 1;
+                if changes > 1 {
+                    return false;
+                }
+                let middle = low + (high - low) / cast(2.);
+                if middle != low && middle != high {
+                    return false;
+                }
+            }
+        }
+        let curvature = -c2 * derphi0;
+        (low_is_origin || self.low_phi > f0 || self.low_derivative.abs() > curvature)
+            && (high_is_origin || self.high_phi > f0 || self.high_derivative.abs() > curvature)
+    }
+
     fn safeguarded_trial_step(&self, older_bracket_width: T, older_low_derivative: T) -> T {
         let width = (self.high_step - self.low_step).abs();
         let interpolated = self.trial_step();
@@ -576,6 +622,66 @@ mod tests {
             assert!((root - 0.5e-12).abs() <= error);
             assert!((root - 0.5e-12).abs() < 1e-18);
         }
+    }
+
+    #[test]
+    fn lattice_stagnation_requires_both_points_to_be_unusable_at_every_parameter() {
+        use num_traits::{Float, FromPrimitive};
+        fn check<T: Float + FromPrimitive>() {
+            let c = |x| T::from(x).unwrap();
+            let mut b = ZoomBracket {
+                low_step: T::zero(),
+                low_phi: T::one(),
+                low_derivative: -T::one(),
+                high_step: T::one(),
+                high_phi: c(2.),
+                high_derivative: T::one(),
+            };
+            for (x, d) in [
+                (T::one(), T::epsilon()),
+                (-T::one(), -T::epsilon()),
+                (T::zero(), T::min_positive_value() * T::epsilon()),
+            ] {
+                assert!(b.only_rejected_lattice_points(
+                    &[x],
+                    &[d],
+                    &[Bound::unbounded()],
+                    T::one(),
+                    -T::one(),
+                    c(0.9)
+                ));
+            }
+            assert!(!b.only_rejected_lattice_points(
+                &[T::one(); 2],
+                &[T::epsilon(); 2],
+                &[Bound::unbounded(); 2],
+                T::one(),
+                -T::one(),
+                c(0.9)
+            ));
+            assert!(!b.only_rejected_lattice_points(
+                &[T::one()],
+                &[c(2.) * T::epsilon()],
+                &[Bound::unbounded()],
+                T::one(),
+                -T::one(),
+                c(0.9)
+            ));
+            // Same point at a different parameter may now satisfy Armijo. Do not
+            // call that stagnation when the original curvature check can pass.
+            b.high_phi = c(0.999);
+            b.high_derivative = T::zero();
+            assert!(!b.only_rejected_lattice_points(
+                &[T::one()],
+                &[T::epsilon()],
+                &[Bound::unbounded()],
+                T::one(),
+                -T::one(),
+                c(0.9)
+            ));
+        }
+        check::<f32>();
+        check::<f64>();
     }
 
     #[test]

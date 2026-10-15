@@ -91,7 +91,7 @@ pub struct OptimizeResult<T> {
 /// search directions and BFGS history, but callbacks/results retain the full
 /// original dimension and gradient. No extra callback is needed for expansion.
 pub fn minimize<T, F>(
-    mut x: Vec<T>,
+    x: Vec<T>,
     bounds: Vec<Bound<T>>,
     options: Options<T>,
     mut fg: F,
@@ -99,6 +99,47 @@ pub fn minimize<T, F>(
 where
     T: Float + FromPrimitive,
     F: FnMut(&[T], &mut [T]) -> anyhow::Result<T>,
+{
+    minimize_impl(x, bounds, options, false, |x, g, _| {
+        fg(x, g).map(|f| (f, T::zero()))
+    })
+}
+
+/// Minimize using an accurate objective difference at each line-search origin.
+/// The callback returns (f(x), f(x) - f(reference)); the second value is ignored
+/// when reference is None (the initial evaluation). Compute the difference
+/// directly, not by subtracting rounded large objective values. Gradients are
+/// always those of the original objective, not of a surrogate or residual norm.
+///
+/// Each search has a fixed reference. A new reference is the last accepted trial;
+/// callers may cache its evaluation without extra oracle calls. Wolfe tests and
+/// function-reduction stopping use the difference; results retain the callback's
+/// absolute value. Budgets count callbacks exactly as in minimize. factr still
+/// uses the absolute objective scale; use factr=0 to disable positive thresholds.
+/// A truly zero difference can still trigger function-reduction termination.
+pub fn minimize_with_differences<T, F>(
+    x: Vec<T>,
+    bounds: Vec<Bound<T>>,
+    options: Options<T>,
+    fg: F,
+) -> anyhow::Result<OptimizeResult<T>>
+where
+    T: Float + FromPrimitive,
+    F: FnMut(&[T], &mut [T], Option<&[T]>) -> anyhow::Result<(T, T)>,
+{
+    minimize_impl(x, bounds, options, true, fg)
+}
+
+fn minimize_impl<T, F>(
+    mut x: Vec<T>,
+    bounds: Vec<Bound<T>>,
+    options: Options<T>,
+    centered: bool,
+    mut fg: F,
+) -> anyhow::Result<OptimizeResult<T>>
+where
+    T: Float + FromPrimitive,
+    F: FnMut(&[T], &mut [T], Option<&[T]>) -> anyhow::Result<(T, T)>,
 {
     validate_problem(&x, &bounds, &options)?;
     project(&mut x, &bounds);
@@ -110,7 +151,7 @@ where
     let variable_bounds: Vec<_> = variables.iter().map(|&i| bounds[i]).collect();
 
     let mut gradient = vec![T::zero(); x.len()];
-    let mut f = fg(&x, &mut gradient)?;
+    let (mut f, _) = fg(&x, &mut gradient, None)?;
     anyhow::ensure!(f.is_finite(), "objective returned non-finite value");
     anyhow::ensure!(all_finite(&gradient), "gradient returned non-finite value");
 
@@ -202,16 +243,28 @@ where
         } else {
             T::one()
         };
+        let mut trial_value = f;
+        let mut search_fg = |trial: &[T], g: &mut [T]| {
+            let (value, difference) = fg(trial, g, centered.then_some(x.as_slice()))?;
+            trial_value = value;
+            // Non-finite absolute values must not be hidden by a finite difference.
+            Ok(if centered && value.is_finite() {
+                difference
+            } else {
+                value
+            })
+        };
+        let search_origin = if centered { T::zero() } else { f };
         let mut search = strong_wolfe(
             &x,
-            f,
+            search_origin,
             &gradient,
             &direction,
             &bounds,
             &options,
             options.max_evaluations - evaluations,
             initial_step,
-            &mut fg,
+            &mut search_fg,
         )?;
         evaluations += search.evaluations;
         // Restart only if there was curvature history to discard. With no history,
@@ -228,18 +281,18 @@ where
             safeguard_steepest_direction(&x, &gradient, &bounds, &mut fallback);
             search = strong_wolfe(
                 &x,
-                f,
+                search_origin,
                 &gradient,
                 &fallback,
                 &bounds,
                 &options,
                 options.max_evaluations - evaluations,
                 initial_step,
-                &mut fg,
+                &mut search_fg,
             )?;
             evaluations += search.evaluations;
         }
-        let Some(line_search) = search.step else {
+        let Some(mut line_search) = search.step else {
             return Ok(OptimizeResult {
                 x,
                 f,
@@ -257,6 +310,15 @@ where
         };
 
         let old_f = f;
+        let reduction = if centered {
+            -line_search.f
+        } else {
+            f - line_search.f
+        };
+        if centered {
+            // strong_wolfe only accepts its most recently evaluated trial.
+            line_search.f = trial_value;
+        }
         accept_step(
             &mut x,
             &mut f,
@@ -280,7 +342,7 @@ where
             });
         }
 
-        if function_reduction_converged(old_f, f, options.factr) {
+        if function_reduction_converged(old_f, f, reduction, options.factr, centered) {
             return Ok(OptimizeResult {
                 x,
                 f,
@@ -393,7 +455,25 @@ fn search_direction<T: Float>(
                     sum + (g / gradient_norm) * (d / direction_norm)
                 });
             let roundoff = T::epsilon() * T::from(32.).unwrap();
-            if slope.is_finite() && slope >= -roundoff {
+            // Clipping can also erase a descent component even when the free
+            // gradient keeps the scaled angle above roundoff. Compare actual
+            // representable unit probes, not an absolute coordinate tolerance.
+            let will_limit = bounds
+                .iter()
+                .any(|b| b.lower.is_none() || b.upper.is_none())
+                || {
+                    let derivative = dot(gradient, &direction);
+                    !derivative.is_finite() || derivative.abs() > T::max_value().sqrt()
+                };
+            let loses_component = will_limit
+                && x.iter().zip(&direction).zip(&steepest).zip(bounds).any(
+                    |(((&x, &d), &s), b)| {
+                        d != T::zero()
+                            && b.project(x + d / direction_norm) == x
+                            && b.project(x + s / gradient_norm) != x
+                    },
+                );
+            if loses_component || (slope.is_finite() && slope >= -roundoff) {
                 safeguard_steepest_direction(x, gradient, bounds, &mut steepest);
                 return steepest;
             }
@@ -439,6 +519,7 @@ fn rounded_diagonal_direction<T: Float>(
     memory: &LbfgsMemory<T>,
 ) -> Option<Vec<T>> {
     let mut direction = vec![T::zero(); x.len()];
+    let mut nearest: Option<(usize, T, T)> = None;
     for (j, &i) in variables.iter().enumerate() {
         if (gradient[i] > T::zero() && bounds[i].is_at_lower(x[i]))
             || (gradient[i] < T::zero() && bounds[i].is_at_upper(x[i]))
@@ -455,6 +536,39 @@ fn rounded_diagonal_direction<T: Float>(
             return None;
         }
         direction[i] = bounds[i].project(target) - x[i];
+        if direction[i] == T::zero() {
+            // An over-stiff model can round EVERY Newton component to zero.
+            // Its nearest coordinate neighbor is still a valid search proposal,
+            // even if the approximate model predicts a loss. Actual Wolfe tests
+            // decide; do not claim convergence from the model's resolution.
+            let two = T::one() + T::one();
+            let spacing =
+                (T::epsilon() * x[i].abs() / two).max(T::min_positive_value() * T::epsilon());
+            let mut step = if gradient[i] > T::zero() {
+                -spacing
+            } else {
+                spacing
+            };
+            let mut point = bounds[i].project(x[i] + step);
+            if point == x[i] {
+                step = step + step;
+                point = bounds[i].project(x[i] + step);
+            }
+            let d = point - x[i];
+            let gain = (-gradient[i] * d) - (diagonal * d) * (d / two);
+            if point.is_finite()
+                && d != T::zero()
+                && gain.is_finite()
+                && nearest.is_none_or(|(_, _, g)| gain > g)
+            {
+                nearest = Some((i, d, gain));
+            }
+        }
+    }
+    if direction.iter().all(|d| *d == T::zero())
+        && let Some((i, d, _)) = nearest
+    {
+        direction[i] = d;
     }
     is_descent_direction(gradient, &direction).then_some(direction)
 }
@@ -576,6 +690,87 @@ mod tests {
         let direction = search_direction(&[1e-300], &[1e50], &[Bound::both(-1., 1.)], &memory);
         assert_eq!(direction, [-1.]);
         assert!(memory.hessian_cache_is_initialized());
+    }
+
+    #[test]
+    fn bounded_motion_is_preserved_even_above_the_old_angle_threshold() {
+        fn check<T: Float + std::fmt::Debug>() {
+            let c = |x| T::from(x).unwrap();
+            for sign in [-T::one(), T::one()] {
+                for swap in [false, true] {
+                    let mut x = vec![sign, sign];
+                    let mut g = vec![-sign * c(2_f64.powi(100)), -sign * c(2_f64.powi(90))];
+                    let mut b = vec![
+                        if sign > T::zero() {
+                            Bound::upper(c(2.))
+                        } else {
+                            Bound::lower(c(-2.))
+                        },
+                        Bound::unbounded(),
+                    ];
+                    if swap {
+                        x.reverse();
+                        g.reverse();
+                        b.reverse();
+                    }
+                    let mut d = search_direction(&x, &g, &b, &LbfgsMemory::new(1));
+                    assert!(is_descent_direction(&g, &d));
+                    if swap {
+                        d.reverse();
+                    }
+                    assert!(sign * d[0] > c(0.5), "{d:?}");
+                    assert!(d[1].abs() < c(0.01), "{d:?}");
+                }
+            }
+        }
+        check::<f32>();
+        check::<f64>();
+    }
+
+    #[test]
+    fn fully_boxed_model_keeps_motion_when_no_unit_limit_will_apply() {
+        fn check<T: Float + std::fmt::Debug>(exponent: i32) {
+            let c = |v| T::from(v).unwrap();
+            let scale = c(2_f64.powi(exponent));
+            let x = [T::one(), T::one()];
+            let g = [-scale * c(1024.), -scale];
+            let b = [
+                Bound::both(T::zero(), c(2.)),
+                Bound::both(T::zero(), scale * c(4.)),
+            ];
+            let d = search_direction(&x, &g, &b, &LbfgsMemory::new(1));
+            assert!(dot(&g, &d).is_finite() && dot(&g, &d).abs() < T::max_value().sqrt());
+            assert_eq!(d[0], T::one());
+            assert!(d[1] > scale / c(2.), "{d:?}");
+        }
+        check::<f32>(30);
+        check::<f64>(90);
+    }
+
+    #[test]
+    fn zero_diagonal_displacement_can_propose_one_ulp_without_extra_callbacks() {
+        fn check<T: Float + std::fmt::Debug>() {
+            let c = |x| T::from(x).unwrap();
+            let theta = c(2_f64.powi(40));
+            let mut memory = LbfgsMemory::new(1);
+            assert!(memory.push(vec![T::one(), T::zero()], vec![theta, T::zero()]));
+            let x = [T::one(), c(2.), c(-0.625)];
+            let g = [
+                T::epsilon() * theta / c(8.),
+                T::epsilon() * theta / c(4.),
+                T::max_value(),
+            ];
+            let b = [
+                Bound::unbounded(),
+                Bound::unbounded(),
+                Bound::both(c(-0.625), c(-0.625)),
+            ];
+            let d = rounded_diagonal_direction(&x, &g, &b, &[0, 1], &memory).unwrap();
+            assert_eq!(d, vec![-T::epsilon() / c(2.), T::zero(), T::zero()]);
+            assert!(is_descent_direction(&g, &d));
+        }
+        check::<f32>();
+        check::<f64>();
     }
 
     fn check_empty_model_clipping<T: Float + std::fmt::Debug>(exponent: i32) {
@@ -720,8 +915,20 @@ mod tests {
     }
 }
 
-fn function_reduction_converged<T: Float>(old_f: T, new_f: T, factr: T) -> bool {
+fn function_reduction_converged<T: Float>(
+    old_f: T,
+    new_f: T,
+    reduction: T,
+    factr: T,
+    centered: bool,
+) -> bool {
     let denom = old_f.abs().max(new_f.abs()).max(T::one());
-    let relative = (old_f - new_f).abs() / denom;
-    relative <= factr * T::epsilon()
+    if centered {
+        // Do not underflow a resolved positive decrease to zero by dividing by
+        // an enormous offset, particularly when factr=0.
+        reduction.abs() <= (factr * T::epsilon()) * denom
+    } else {
+        let relative = reduction.abs() / denom;
+        relative <= factr * T::epsilon()
+    }
 }

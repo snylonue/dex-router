@@ -14,6 +14,29 @@ Byrd-Lu-Nocedal-Zhu L-BFGS-B design. The official Fortran 3.0 distribution
 from Northwestern is BSD-3-Clause licensed, but this crate is a Rust
 implementation organized around the public API used by this workspace.
 
+## Accurate difference oracle (optional)
+
+The existing `minimize` callback and its arithmetic are retained.
+`minimize_with_differences` takes a callback
+`(x, gradient, reference) -> Result<(value, difference)>`. The first call has
+no reference; subsequent calls supply the fixed origin of the current line
+search. Return the original objective and an accurately computed
+`f(x) - f(reference)`, not a residual norm or a gradient-only approximation.
+
+The same Wolfe search operates on the translated function with value zero at
+its origin. Gradient and curvature memory are unchanged. The accepted result
+keeps the absolute callback value, while function-reduction stopping uses the
+accurate difference and the original absolute-value scale. In this API,
+`factr=0` cannot stop merely because adding a decrease to a large constant
+rounds away, or because dividing it by that constant underflows. An actually
+zero difference can still stop. Positive factr remains sensitive to offsets.
+
+References change only to the last accepted trial, so expensive oracles can
+cache it without uncounted evaluations. Nonfinite values/differences/gradients
+and callback errors are not hidden. Budgets, fixed-variable expansion, feasible
+endpoints and rejection of unchecked steps retain their original semantics.
+No domain-specific token logic is introduced into the optimizer.
+
 ## Solver State
 
 The user supplies an initial point, simple bounds, and a closure that

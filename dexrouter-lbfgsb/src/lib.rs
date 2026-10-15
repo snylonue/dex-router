@@ -10,7 +10,7 @@ mod subspace;
 
 pub use bounds::Bound;
 pub use line_search::LineSearchFailure;
-pub use solver::{OptimizeResult, Options, Status, minimize};
+pub use solver::{OptimizeResult, Options, Status, minimize, minimize_with_differences};
 
 use num_traits::{Float, FromPrimitive};
 

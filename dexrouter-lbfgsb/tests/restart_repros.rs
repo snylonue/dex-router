@@ -149,6 +149,55 @@ fn diagonal_restart_preserves_progress_near_the_f32_lattice_with_fixed_variables
 }
 
 #[test]
+fn over_stiff_history_must_not_hide_a_descending_single_ulp_neighbor() {
+    check(Fixture {
+        start: vec![-6.75, 6.5, -6.5],
+        target: vec![2.375, 0.375, 2.875],
+        bounds: vec![Bound::upper(3.125), Bound::upper(0.375), Bound::unbounded()],
+        normal: vec![0., -1., 0.],
+        mu: 16.,
+        scale: 2_f32.powi(9),
+        memory: 1,
+        max_calls: 60,
+        terms: vec![
+            term(&[-0.25, 0.5, -0.5], 2., Some(0.25)),
+            term(&[0., -0.25, -0.25], 2., None),
+            term(&[-0.25, 0.25, 0.5], 0.125, None),
+            term(&[-0.5, -0.25, 0.25], 0.25, None),
+            term(&[-0.25, 0.25, 0.25], 4., None),
+            term(&[0.5, 0.5, 0.25], 2048., None),
+            term(&[-0.25, -0.25, 0.5], 1., Some(-0.25)),
+        ],
+    });
+}
+
+#[test]
+fn empty_model_must_not_lose_bounded_motion_despite_a_resolved_free_slope() {
+    check(Fixture {
+        start: vec![4.5, 7.25, 0.25, -6.5, 0.25],
+        target: vec![3., 1.25, -1.5, 0.875, -2.875],
+        bounds: vec![
+            Bound::both(3., 3.25),
+            Bound::both(-0.75, 1.25),
+            Bound::upper(-1.5),
+            Bound::upper(0.875),
+            Bound::unbounded(),
+        ],
+        normal: vec![1., -2., -2., -2., 0.],
+        mu: 0.25,
+        scale: 2_f32.powi(60),
+        memory: 1,
+        max_calls: 600,
+        terms: vec![
+            term(&[0., -0.25, 0., 0.5, 0.25], 32., None),
+            term(&[0.5, -0.5, 0., 0.5, 0.5], 4096., Some(0.5)),
+            term(&[0., 0., 0., 0., -0.25], 4., None),
+            term(&[0., -0.25, 0., 0., -0.25], 2_f32.powi(-6), None),
+        ],
+    });
+}
+
+#[test]
 fn finite_initial_slope_must_leave_headroom_for_trial_derivatives() {
     check(Fixture {
         start: vec![-6.75, -4.5, 4.5, 7.25, 0.25, -6.5, 0.25],
